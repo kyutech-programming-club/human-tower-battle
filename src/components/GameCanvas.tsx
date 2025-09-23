@@ -1,11 +1,22 @@
+import styles from "./GameCanvas.module.css"
 import React, { useEffect, useRef, useState } from "react";
 import Matter from "matter-js";
+import { useNavigate } from "react-router-dom";
 import { Block } from "../game/Block";
 import { BlockManager } from "../game/BlockManager";
+import { createStage1 } from "../stages/Stage1.tsx";
+import { createStage2 } from "../stages/Stage2.tsx";
 
-const GameCanvas: React.FC = () => {
+type StageFactory = (world: Matter.World, ctx: CanvasRenderingContext2D) => { draw: () => void };
+
+interface GameCanvasProps {
+  stage: "stage1" | "stage2"; // ← propsでステージを選べるように
+}
+
+const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef(Matter.Engine.create());
+  const navigate = useNavigate();
   const blockManagerRef = useRef(new BlockManager());
   const [isGameOver, setIsGameOver] = useState(false);
 
@@ -20,13 +31,15 @@ const GameCanvas: React.FC = () => {
     const engine = engineRef.current;
     const world = engine.world;
 
-    // 床
-    const groundWidth = 400;
-    const groundHeight = 20;
-    const groundX = 400;
-    const groundY = 500 - groundHeight / 2;
-    const ground = Matter.Bodies.rectangle(groundX, groundY, groundWidth, groundHeight, { isStatic: true });
-    Matter.World.add(world, [ground]);
+    // ステージ選択
+    let stageFactory: StageFactory;
+    if (stage === "stage1") {
+      stageFactory = createStage1;
+    } else {
+      stageFactory = createStage2;
+    }
+
+    const stageObj = stageFactory(world, ctx);
 
     // スペースキーでブロック生成
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -44,9 +57,8 @@ const GameCanvas: React.FC = () => {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 床描画
-      ctx.fillStyle = "brown";
-      ctx.fillRect(ground.position.x - groundWidth / 2, ground.position.y - groundHeight / 2, groundWidth, groundHeight);
+      // ステージ描画
+      stageObj.draw();
 
       // ブロック描画
       ctx.fillStyle = "blue";
@@ -59,7 +71,6 @@ const GameCanvas: React.FC = () => {
         ctx.restore();
       });
 
-      // 画面外ブロック削除 & GAME OVER判定
       if (!isGameOver) {
         blockManagerRef.current.blocks = blockManagerRef.current.blocks.filter((b) => {
           const pos = b.body.position;
@@ -88,9 +99,8 @@ const GameCanvas: React.FC = () => {
       window.removeEventListener("keydown", handleKeyDown);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isGameOver]);
+  }, [isGameOver, stage]);
 
-  // リスタート
   const restartGame = () => {
     const newEngine = Matter.Engine.create();
     blockManagerRef.current.removeAll(engineRef.current.world);
@@ -99,34 +109,34 @@ const GameCanvas: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        position: "relative",
-        backgroundColor: "#f0f0f0",
-      }}
-    >
+    <div style={{ width: "100vw", height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", position: "relative", backgroundColor: "#f0f0f0" }}>
       <canvas ref={canvasRef} width={800} height={500} style={{ border: "2px solid black" }} />
+      
+      {/* RESTARTダイアログ */}
       {isGameOver && (
         <button
           onClick={restartGame}
-          style={{
-            position: "absolute",
-            top: "60%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            fontSize: "24px",
-            padding: "10px 20px",
-            zIndex: 10,
-          }}
+          className={styles.restartButton}
         >
           RESTART
         </button>
       )}
+
+      {/* ホーム画面に戻るボタン */}
+      <button
+        onClick={() => navigate("/")}
+        style={{
+          position: "absolute",
+          top: "90%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          fontSize: "20px",
+          padding: "8px 16px",
+          zIndex: 10,
+        }}
+      >
+        ホームに戻る
+      </button>
     </div>
   );
 };
