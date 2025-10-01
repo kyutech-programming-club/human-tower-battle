@@ -1,8 +1,8 @@
 import Matter from "matter-js";
 
-export function createStage1(world: Matter.World, ctx: CanvasRenderingContext2D) {
+export function createStage3(world: Matter.World, ctx: CanvasRenderingContext2D) {
   // 床の定義
-  const groundWidth = 450;
+  const groundWidth = 100;
   const groundHeight = 20;
   const groundX = 225;
   const groundY = 530 - groundHeight / 2;
@@ -23,4 +23,3 @@ export function createStage1(world: Matter.World, ctx: CanvasRenderingContext2D)
 
   return { ground, draw };
 }
-
