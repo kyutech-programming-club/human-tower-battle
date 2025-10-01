@@ -6,3 +6,48 @@
   color: #333; /* 文字色 */
   border-bottom: 1px solid #ddd; /* 下線で区切る */
 }
+
+.container {
+  height: 100vh;
+  background: linear-gradient(to top, #a0e0ff, #ffffff);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* タイトル */
+.title {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #ff9933;
+  text-shadow: 2px 2px 0px #ffffff, 4px 4px 0px #ffcc66;
+  margin-bottom: 2rem;
+}
+
+/* メニュー中央 */
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.button {
+  background: #ffcc33;
+  color: #333;
+  font-size: 1.5rem;
+  font-weight: bold;
+  padding: 1rem 2rem;
+  border-radius: 50px;
+  text-decoration: none;
+  text-align: center;
+  box-shadow: 3px 3px 0px #ff9933;
+  transition: transform 0.2s;
+}
+
+.button:hover {
+  transform: scale(1.05);
+}
+

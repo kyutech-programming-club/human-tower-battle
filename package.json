@@ -15,7 +15,7 @@
     "poly-decomp": "^0.3.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "sobel": "^0.0.11"
+    "sobel": "^0.0.11",
     "react-router-dom": "^7.9.1"
   },
   "devDependencies": {

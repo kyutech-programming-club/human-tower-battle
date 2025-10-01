@@ -1,16 +1,16 @@
-import styles from "./Home.module.css"
+import styles from "./Home.module.css";
 import { Link } from "react-router-dom";
 
 const Home = () => {
   return (
-    <div>
-      <h1>ホーム画面</h1>
-      <nav>
-        <ul>
-          <li className={styles.scoreItem}><Link to="/stage1">ステージ1</Link></li>
-          <li className={styles.scoreItem}><Link to="/stage2">ステージ2</Link></li>
-        </ul>
-      </nav>
+    <div className={styles.container}>
+      <h1 className={styles.title}>人間タワーバトル</h1>
+      
+      <div className={styles.menu}>
+        <Link to="/stage1" className={styles.button}>ステージ1</Link>
+        <Link to="/stage2" className={styles.button}>ステージ2</Link>
+      </div>
+
     </div>
   );
 };
