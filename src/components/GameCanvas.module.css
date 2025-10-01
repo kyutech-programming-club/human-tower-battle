@@ -1,3 +1,30 @@
+
+.container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative; /* 子要素のabsoluteを基準に */
+  background-color: #f0f0f0;
+}
+
+.canvas {
+  border: 2px solid black;
+  position: relative;
+  z-index: 1;
+}
+
+.bodyPixOverlay {
+  position: absolute;
+  top: 13px;
+  left: 200;
+  width: 450;
+  height: 337.5;
+  z-index: 2;
+  pointer-events: none;
+}
+
 .restartButton {
   position: absolute;
   top: 60%;

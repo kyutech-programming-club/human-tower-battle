@@ -4,13 +4,16 @@ import GameCanvas from "./components/GameCanvas";
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/stage1" element={<GameCanvas stage="stage1" />} />
-        <Route path="/stage2" element={<GameCanvas stage="stage2" />} />
-      </Routes>
-    </Router>
+    <>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/stage1" element={<GameCanvas stage="stage1" />} />
+          <Route path="/stage2" element={<GameCanvas stage="stage2" />} />
+          <Route path="/stage3" element={<GameCanvas stage="stage3" />} />
+        </Routes>
+      </Router>
+    </>
   );
 }
 

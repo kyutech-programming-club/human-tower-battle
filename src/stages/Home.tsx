@@ -9,6 +9,7 @@ const Home = () => {
         <ul>
           <li className={styles.scoreItem}><Link to="/stage1">ステージ1</Link></li>
           <li className={styles.scoreItem}><Link to="/stage2">ステージ2</Link></li>
+          <li className={styles.scoreItem}><Link to="/stage3">ステージ3</Link></li>
         </ul>
       </nav>
     </div>
