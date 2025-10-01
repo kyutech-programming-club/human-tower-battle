@@ -22,7 +22,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const engineRef = useRef(Matter.Engine.create());
   const navigate = useNavigate();
   const blockManagerRef = useRef(new BlockManager());
-  const [blockCount, setBlockCount] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
   const [position, setPosition] = useState(400);
   const scale = 1;
