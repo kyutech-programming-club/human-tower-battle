@@ -4,7 +4,7 @@ import Matter from "matter-js";
 import Png from "../img/43sb4.png";
 import concaveman from "concaveman";
 import { ImageToDict } from "./ImageToDict";
-import BodyPixTest from "./BodyPix.tsx";
+import BodyPix from "./BodyPix.tsx";
 import { useNavigate } from "react-router-dom";
 import { BlockManager } from "./BlockManager.tsx";
 import { createStage1 } from "../stages/Stage1.tsx";
@@ -231,8 +231,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
   return (
     <div className={styles.container}>
-      <canvas ref={canvasRef} width={450} height={580} className={styles.canvas} />
-      {/* <BodyPixTest className={styles.bodyPixOverlay} /> */}
+      <div className={styles.canvasWrapper}>
+        <canvas ref={canvasRef} width={450} height={580} className={styles.canvas} />
+        <BodyPix />
+        {/* <BodyPixTest className={styles.bodyPixOverlay} /> */}
+      </div>
       <div
         style={{
           position: "absolute",
@@ -244,7 +247,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           fontWeight: "bold",
         }}
       >
-        ブロック数: {blockCount}
+        {/* ブロック数: {blockCount} */}
       </div>
 
       {/* RESTARTダイアログ */}
