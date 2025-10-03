@@ -9,9 +9,13 @@
   background-color: #f0f0f0;
 }
 
+.canvas-wrapper {
+  position: relative;
+}
+
 .canvas {
   border: 2px solid black;
-  position: relative;
+  position: absolute;
   z-index: 1;
 }
 
