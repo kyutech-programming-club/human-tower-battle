@@ -1,7 +1,7 @@
-import styles from "./GameCanvas.module.css"
+import styles from "./GameCanvas.module.css";
 import React, { useEffect, useRef, useState } from "react";
 import Matter from "matter-js";
-import Png from "../img/43sb4.png";
+import Png from "../img/IMG_2955.png";
 import concaveman from "concaveman";
 import { ImageToDict } from "./ImageToDict";
 import { useNavigate } from "react-router-dom";
@@ -9,8 +9,13 @@ import { Block } from "../game/Block";
 import { BlockManager } from "../game/BlockManager";
 import { createStage1 } from "../stages/Stage1.tsx";
 import { createStage2 } from "../stages/Stage2.tsx";
+import { recognizeBorder } from "./RecognizeBorder.tsx";
+import decomp from "poly-decomp";
 
-type StageFactory = (world: Matter.World, ctx: CanvasRenderingContext2D) => { draw: () => void };
+type StageFactory = (
+  world: Matter.World,
+  ctx: CanvasRenderingContext2D
+) => { draw: () => void };
 
 interface GameCanvasProps {
   stage: "stage1" | "stage2"; // ← propsでステージを選べるように
@@ -23,7 +28,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const blockManagerRef = useRef(new BlockManager());
   const [isGameOver, setIsGameOver] = useState(false);
   const [position, setPosition] = useState(400);
-  const scale = 1;
+  const scale = 0.05;
   const [edgePoints, setEdgePoints] = useState<{ x: number; y: number }[]>([]);
 
   useEffect(() => {
@@ -34,38 +39,113 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     let animationFrameId: number;
     const engine = engineRef.current;
     const world = engine.world;
-    const spawnTargetImg = async () => {
-      const points = await ImageToDict(Png); // points に確実に取得
-      setEdgePoints(points);
-      const scaledPoints = scalePoints(points, scale, scale);
 
-      const polygon = concaveman(scaledPoints.map((p) => [p.x, p.y]));
+    // const spawnTargetImg = async () => {
+    //   const points = await ImageToDict(Png); // points に確実に取得
+    //   const test = await recognizeBorder(Png);
+    //   // const vertices: [number, number][] = test.map((p) => [p.x, p.y]);
+    //   const vertices: [number, number][] = ensureCCW(
+    //     test.map((p) => [p.x, p.y] as [number, number])
+    //   );
+    //   console.log(vertices);
+    //   const convexPolygons:= decomp.quickDecomp(vertices);
+    //   console.log(convexPolygons);
+    //   const parts = convexPolygons.map(
+    //     (polygon) =>
+    //       Matter.Bodies.fromVertices(
+    //         400,
+    //         0,
+    //         polygon,
+    //         {
+    //           isStatic: false,
+    //           friction: 0.1,
+    //           restitution: 0.1,
+    //         },
+    //         true
+    //       ) // ここを true にすると自動修正でBody作成
+    //   );
 
-      // polygon は [[x1,y1],[x2,y2],...] の形式で返るので
-      const vertices = polygon.map(([x, y]) => ({ x, y }));
-      const avg = getAveragePoint(points);
-      const TargetImg = Matter.Bodies.fromVertices(
-        canvas.width / 2 - avg.x * scale,
-        -avg.x * scale,
-        [vertices],
-        {
-          label: "TargetImg",
-          render: {
-            sprite: {
-              texture: Png,
-              xScale: 1,
-              yScale: 1,
-            },
-          },
-        },
-        false
-      );
-      console.log(TargetImg);
-      Matter.World.add(engineRef.current.world, [TargetImg]);
-    };
+    //   const body = Matter.Body.create({
+    //     parts,
+    //     position: { x:400, y:0 },
+    //   });
 
+    //   // console.log(test)
+    //   // setEdgePoints(points);
+    //   // const scaledPoints = scalePoints(points, scale, scale);
+
+    //   // const polygon = concaveman(scaledPoints.map((p) => [p.x, p.y]));
+
+    //   // // polygon は [[x1,y1],[x2,y2],...] の形式で返るので
+    //   // const vertices = polygon.map(([x, y]) => ({ x, y }));
+    //   // const avg = getAveragePoint(points);
+    //   // const TargetImg = Matter.Bodies.fromVertices(
+    //   //   canvas.width / 2 - avg.x * scale,
+    //   //   -avg.x * scale,
+    //   //   [vertices],
+    //   //   {
+    //   //     label: "TargetImg",
+    //   //     render: {
+    //   //       sprite: {
+    //   //         texture: Png,
+    //   //         xScale: 1,
+    //   //         yScale: 1,
+    //   //       },
+    //   //     },
+    //   //   },
+    //   //   false
+    //   // );
+    //   // Matter.World.add(engineRef.current.world, [TargetImg]);
+    // };
 
     // ステージ選択
+    const spawnTargetImg = async () => {
+      const test = await recognizeBorder(Png);
+      setEdgePoints(test);
+      // CCW補正して [number, number][] に
+      const vertices: [number, number][] = ensureCCW(
+        test.map((p) => [p.x * scale, p.y * scale] as [number, number])
+      );
+      // 凸分割
+      const convexPolygons: [number, number][][] = decomp.quickDecomp(vertices);
+
+      // Matter.js の Vector[][] に変換
+      const matterPolygons: Matter.Vector[][] = convexPolygons.map((polygon) =>
+        polygon.map(([x, y]) => ({ x, y }))
+      );
+
+      // 各凸ポリゴンから Body を作成
+
+      // Body を生成
+      const parts = matterPolygons.map((polygon) => {
+        const centroid = getCentroid(polygon);
+        const shiftedPolygon = polygon.map((v) => ({
+          x: v.x - centroid.x,
+          y: v.y - centroid.y,
+        }));
+
+        return Matter.Bodies.fromVertices(
+          200 + centroid.x,
+          centroid.y,
+          [shiftedPolygon],
+          {
+            label: "TargetImg",
+            isStatic: false,
+            friction: 0,
+            restitution: 0,
+          }
+        );
+      });
+      // 全部まとめて1つの Body に
+      const body = Matter.Body.create({
+        parts,
+        label: "TargetImg",
+      });
+      Matter.Body.set(body, { sleepThreshold: Infinity });
+      Matter.World.add(world, parts[0]);
+      engine.positionIterations = 10;
+      engine.velocityIterations = 10;
+    };
     let stageFactory: StageFactory;
     if (stage === "stage1") {
       stageFactory = createStage1;
@@ -75,7 +155,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     const stageObj = stageFactory(world, ctx);
 
     // スペースキーでブロック生成
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.code === "Space" && !isGameOver) {
         // const block = new Block(position, 0, 60, 60, { restitution: 0.2 });
         // blockManagerRef.current.addBlock(block, world);
@@ -107,7 +187,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
       // ステージ描画
       stageObj.draw();
-
       // ブロック描画
       ctx.fillStyle = "blue";
       blockManagerRef.current.blocks.forEach((b) => {
@@ -120,37 +199,49 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       });
 
       world.bodies.forEach((body) => {
-        if (body.label === "TargetImg") {
+        const img = new Image();
+        img.src = Png;
+
+        // 親Bodyのpartsをループ
+        world.bodies.forEach((body) => {
+          if (body.label !== "TargetImg") return;
+
           const img = new Image();
           img.src = Png;
 
+          // 親Bodyの位置と角度に合わせて描画
           ctx.save();
           ctx.translate(body.position.x, body.position.y);
           ctx.rotate(body.angle);
-          const avg = getAveragePoint(edgePoints);
-          const offsetX = avg.x * scale;
-          const offsetY = avg.y * scale;
-          // PNGの見た目を一致させる
+
+          // Body全体の中心に画像を合わせる
+          const centroid = getAveragePoint(edgePoints);
+
           ctx.drawImage(
             img,
-            -offsetX,
-            -offsetY,
+            -centroid.x * scale,
+            -centroid.y * scale,
             img.width * scale,
             img.height * scale
           );
+
           ctx.restore();
 
-          // 当たり判定（ポリゴン）表示
-          ctx.strokeStyle = "rgba(0,0,255,0.5)";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          body.vertices.forEach((v, i) => {
-            if (i === 0) ctx.moveTo(v.x, v.y);
-            else ctx.lineTo(v.x, v.y);
+          // 当たり判定（子パーツ）はそのまま描画
+          body.parts.forEach((part) => {
+            if (part.id === body.id) return;
+
+            ctx.strokeStyle = "rgba(0,0,255,0.5)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            part.vertices.forEach((v, i) => {
+              if (i === 0) ctx.moveTo(v.x, v.y);
+              else ctx.lineTo(v.x, v.y);
+            });
+            ctx.closePath();
+            ctx.stroke();
           });
-          ctx.closePath();
-          ctx.stroke();
-        }
+        });
       });
 
       // 画面外ブロック削除 & GAME OVER判定
@@ -203,7 +294,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
       if (isGameOver) {
         ctx.fillStyle = "red";
-        ctx.font = "40px sans-serif";
+        ctx.font = "40px sans-serif";git branch
         ctx.textAlign = "center";
         ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
       } else {
@@ -227,15 +318,27 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   };
 
   return (
-    <div style={{ width: "100vw", height: "100vh", display: "flex", justifyContent: "center", alignItems: "center", position: "relative", backgroundColor: "#f0f0f0" }}>
-      <canvas ref={canvasRef} width={800} height={500} style={{ border: "2px solid black" }} />
-      
+    <div
+      style={{
+        width: "100vw",
+        height: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        position: "relative",
+        backgroundColor: "#f0f0f0",
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        width={800}
+        height={500}
+        style={{ border: "2px solid black" }}
+      />
+
       {/* RESTARTダイアログ */}
       {isGameOver && (
-        <button
-          onClick={restartGame}
-          className={styles.restartButton}
-        >
+        <button onClick={restartGame} className={styles.restartButton}>
           RESTART
         </button>
       )}
@@ -303,3 +406,26 @@ const getAveragePoint = (points: { x: number; y: number }[]) => {
     y: sum.y / points.length,
   };
 };
+
+function ensureCCW(vertices: [number, number][]): [number, number][] {
+  let sum = 0;
+  for (let i = 0; i < vertices.length; i++) {
+    const [x1, y1] = vertices[i];
+    const [x2, y2] = vertices[(i + 1) % vertices.length];
+    sum += (x2 - x1) * (y2 + y1);
+  }
+  return sum > 0 ? vertices.reverse() : vertices;
+}
+
+import { Vector } from "matter-js";
+
+function getCentroid(polygon: Vector[]): Vector {
+  let xSum = 0,
+    ySum = 0;
+  for (let v of polygon) {
+    xSum += v.x;
+    ySum += v.y;
+  }
+  const n = polygon.length;
+  return { x: xSum / n, y: ySum / n };
+}

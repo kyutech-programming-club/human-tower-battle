@@ -1,12 +1,28 @@
 import Matter from "matter-js";
 
-export function createStage1(world: Matter.World, ctx: CanvasRenderingContext2D) {
+export function createStage1(
+  world: Matter.World,
+  ctx: CanvasRenderingContext2D
+) {
   // 床の定義
   const groundWidth = 400;
-  const groundHeight = 20;
+  const groundHeight = 100;
   const groundX = 400;
   const groundY = 500 - groundHeight / 2;
-  const ground = Matter.Bodies.rectangle(groundX, groundY, groundWidth, groundHeight, { isStatic: true });
+  const ground = Matter.Bodies.rectangle(
+    groundX,
+    groundY,
+    groundWidth,
+    groundHeight,
+    {
+      isStatic: true,
+      label: "Floor",
+      collisionFilter: {
+        category: 0x0001, // ← 床のカテゴリ
+        mask: 0xffff, // 全てと衝突可能
+      },
+    }
+  );
 
   Matter.World.add(world, [ground]);
 
@@ -23,4 +39,3 @@ export function createStage1(world: Matter.World, ctx: CanvasRenderingContext2D)
 
   return { ground, draw };
 }
-
