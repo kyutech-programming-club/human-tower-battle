@@ -294,7 +294,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
       if (isGameOver) {
         ctx.fillStyle = "red";
-        ctx.font = "40px sans-serif";git branch
+        ctx.font = "40px sans-serif";
         ctx.textAlign = "center";
         ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
       } else {
