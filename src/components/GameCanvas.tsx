@@ -4,13 +4,14 @@ import Matter from "matter-js";
 import Png from "../img/IMG_2955.png";
 import concaveman from "concaveman";
 import { ImageToDict } from "./ImageToDict";
+import BodyPix from "./BodyPix.tsx";
 import { useNavigate } from "react-router-dom";
-import { Block } from "../game/Block";
-import { BlockManager } from "../game/BlockManager";
+import { BlockManager } from "./BlockManager.tsx";
 import { createStage1 } from "../stages/Stage1.tsx";
 import { createStage2 } from "../stages/Stage2.tsx";
 import { recognizeBorder } from "./RecognizeBorder.tsx";
 import decomp from "poly-decomp";
+import { createStage3 } from "../stages/Stage3.tsx";
 
 type StageFactory = (
   world: Matter.World,
@@ -18,7 +19,7 @@ type StageFactory = (
 ) => { draw: () => void };
 
 interface GameCanvasProps {
-  stage: "stage1" | "stage2"; // ← propsでステージを選べるように
+  stage: "stage1" | "stage2" | "stage3"; // ← propsでステージを選べるように
 }
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
@@ -149,8 +150,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     let stageFactory: StageFactory;
     if (stage === "stage1") {
       stageFactory = createStage1;
-    } else {
+    } else if(stage === "stage2") {
       stageFactory = createStage2;
+    } else {
+      stageFactory = createStage3;
     }
     const stageObj = stageFactory(world, ctx);
 
@@ -257,9 +260,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         bodiesToCheck.forEach((body) => {
           const pos = body.position;
           if (
-            pos.y > canvas.height + 50 ||
-            pos.x < -50 ||
-            pos.x > canvas.width + 50
+            pos.y > canvas.height + 30 ||
+            pos.x < -10 ||
+            pos.x > canvas.width + 10
           ) {
             // ブロックなら manager からも削除
             const block = blockManagerRef.current.blocks.find(
@@ -318,24 +321,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   };
 
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        position: "relative",
-        backgroundColor: "#f0f0f0",
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        width={800}
-        height={500}
-        style={{ border: "2px solid black" }}
-      />
-
+    <div className={styles.container}>
+      <div className={styles.canvasWrapper}>
+        <canvas ref={canvasRef} width={450} height={580} className={styles.canvas} />
+        <BodyPix />
+        {/* <BodyPixTest className={styles.bodyPixOverlay} /> */}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          top: "20px",
+          left: "20px",
+          backgroundColor: "rgba(255,255,255,0.8)",
+          padding: "8px 12px",
+          borderRadius: "8px",
+          fontWeight: "bold",
+        }}
+      >
+        {/* ブロック数: {blockCount} */}
+      </div>
       {/* RESTARTダイアログ */}
       {isGameOver && (
         <button onClick={restartGame} className={styles.restartButton}>
@@ -348,8 +352,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         onClick={() => navigate("/")}
         style={{
           position: "absolute",
-          top: "90%",
-          left: "50%",
+          top: "88%",
+          left: "80%",
           transform: "translateX(-50%)",
           fontSize: "20px",
           padding: "8px 16px",
@@ -380,8 +384,6 @@ export const getVerticesFromSvg = async (path: string) => {
   });
   return vertices;
 };
-
-// GameCanvas.tsx
 
 const scalePoints = (
   points: { x: number; y: number }[],
