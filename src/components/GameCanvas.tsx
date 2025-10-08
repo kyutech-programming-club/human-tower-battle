@@ -179,19 +179,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           return;
         }
 
-        const test = await recognizeBorder(imageToUse);
-        setEdgePoints(test);
-        console.log("recognizeBorder完了:", test.length, "points");
+        const { points, rect, size } = await recognizeBorder(imageToUse);
+        setEdgePoints(points);
+        console.log("recognizeBorder完了:", points.length, "points");
+
+        // 表示倍率（縦横同スケールの場合）
+        const sx = scale;
+        const sy = scale;
+        // ※ 縦横比が変わる描画なら
+        // const sx = displayedWidth  / size.w;
+        // const sy = displayedHeight / size.h;
 
         // CCW補正して [number, number][] に
         const vertices: [number, number][] = ensureCCW(
-          test.map((p) => [p.x * scale, p.y * scale] as [number, number])
+          points.map((p) => [p.x * sx, p.y * sy] as [number, number])
         );
         console.log("vertices生成完了:", vertices.length, "vertices");
 
         // 凸分割
-        const convexPolygons: [number, number][][] =
-          decomp.quickDecomp(vertices);
+        const convexPolygons: [number, number][][] = decomp.quickDecomp(vertices);
         console.log("凸分割完了:", convexPolygons.length, "polygons");
 
         // Matter.js の Vector[][] に変換
@@ -199,18 +205,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           (polygon) => polygon.map(([x, y]) => ({ x, y }))
         );
 
-        // 各凸ポリゴンから Body を作成
+        // 各凸ポリゴンから Body を作成（重心原点にシフト）
         const parts = matterPolygons.map((polygon, index) => {
           const centroid = getCentroid(polygon);
-          const shiftedPolygon = polygon.map((v) => ({
-            x: v.x - centroid.x,
-            y: v.y - centroid.y,
-          }));
-
+          const shifted = polygon.map((v) => ({ x: v.x - centroid.x, y: v.y - centroid.y }));
           const body = Matter.Bodies.fromVertices(
-            centroid.x, // 各パートの重心位置
+            centroid.x,
             centroid.y,
-            [shiftedPolygon],
+            [shifted],
             {
               label: "TargetImg",
               isStatic: true,
@@ -220,30 +222,38 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
               density: 0.02,
             }
           );
-
           console.log(`Part ${index} 生成完了:`, centroid);
           return body;
         });
 
-        // すべてのpartsを1つのcompound bodyに統合
-        const compoundBody = Matter.Body.create({
-          parts: parts,
-          label: "TargetImg",
-        });
-
-        // BodyにカスタムプロパティとしてimageIdを追加
+        // compound body作成
+        const compoundBody = Matter.Body.create({ parts, label: "TargetImg" });
         (compoundBody as any).imageId = imageId;
 
-        // 統合されたbodyの位置を設定
-        Matter.Body.setPosition(compoundBody, { x: 225, y: 50 });
+        // === ここがズレ対策の肝 ===
+        // 画像の画面上の左上（ピクセル座標）
+        const imgX = /* 画像を描いている左上X */ 225; // ←実際の描画先に合わせて
+        const imgY = /* 画像を描いている左上Y */ 50;  // ←実際の描画先に合わせて
 
-        // 1つのcompound bodyをworldに追加
-        console.log("1つのcompound bodyをWorldに追加");
+        // 「見えている形」の左上 = 画像左上 + rect左上 * 表示スケール
+        const shapeTopLeft = { x: imgX + rect.x * sx, y: imgY + rect.y * sy };
+
+        // いったんワールド原点近くに置いてから……
+        Matter.Body.setPosition(compoundBody, { x: 0, y: 0 });
+
+        // ボディのAABB左上と "見えている形" の左上を一致させる
+        const bmin = compoundBody.bounds.min;
+        Matter.Body.translate(compoundBody, {
+          x: shapeTopLeft.x - bmin.x,
+          y: shapeTopLeft.y - bmin.y,
+        });
+
+        // 追加
         Matter.World.add(world, compoundBody);
-        console.log("オブジェクト生成完了！");
+        console.log("1つのcompound bodyをWorldに追加 / オブジェクト生成完了！");
 
-        engine.positionIterations = 10;
-        engine.velocityIterations = 10;
+        // engine.positionIterations = 10;
+        // engine.velocityIterations = 10;
       } catch (error) {
         console.error("オブジェクト生成に失敗しました:", error);
       } finally {
@@ -343,17 +353,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
         // 当たり判定（子パーツ）はそのまま描画
         body.parts.forEach((part) => {
-          if (part.id === body.id) return;
+          // if (part.id === body.id) return;
 
-          ctx.strokeStyle = "rgba(0,0,255,0.5)";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          part.vertices.forEach((v, i) => {
-            if (i === 0) ctx.moveTo(v.x, v.y);
-            else ctx.lineTo(v.x, v.y);
-          });
-          ctx.closePath();
-          ctx.stroke();
+          // ctx.strokeStyle = "rgba(0,0,255,0.5)";
+          // ctx.lineWidth = 2;
+          // ctx.beginPath();
+          // part.vertices.forEach((v, i) => {
+          //   if (i === 0) ctx.moveTo(v.x, v.y);
+          //   else ctx.lineTo(v.x, v.y);
+          // });
+          // ctx.closePath();
+          // ctx.stroke();
         });
       } // ← for...ofループを閉じる
 
