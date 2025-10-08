@@ -123,80 +123,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     const engine = engineRef.current;
     const world = engine.world;
 
-    // stageFactory を決める
-    let stageFactory: StageFactory;
-    if (stage === "stage1") stageFactory = createStage1;
-    else if (stage === "stage2") stageFactory = createStage2;
-    else stageFactory = createStage3;
-
-    // 最初に stageObj を作成して ref に保持
-    stageObjRef.current = stageFactory(engineRef.current.world, ctx);
-
-    const spawnTargetImg = async () => {
-      const test = await recognizeBorder(Png);
-      setEdgePoints(test);
-      // CCW補正して [number, number][] に
-      const vertices: [number, number][] = ensureCCW(
-        test.map((p) => [p.x * scale, p.y * scale] as [number, number])
-      );
-      // 凸分割
-      const convexPolygons: [number, number][][] = decomp.quickDecomp(vertices);
-
-      // Matter.js の Vector[][] に変換
-      const matterPolygons: Matter.Vector[][] = convexPolygons.map((polygon) =>
-        polygon.map(([x, y]) => ({ x, y }))
-      );
-
-      // 各凸ポリゴンから Body を作成
-
-      // Body を生成
-      const parts = matterPolygons.map((polygon) => {
-        const centroid = getCentroid(polygon);
-        const shiftedPolygon = polygon.map((v) => ({
-          x: v.x - centroid.x,
-          y: v.y - centroid.y,
-        }));
-
-        return Matter.Bodies.fromVertices(
-          200 + centroid.x,
-          centroid.y,
-          [shiftedPolygon],
-          {
-            label: "TargetImg",
-            isStatic: true,
-            friction: 0.6, // ブロック同士の摩擦
-            frictionStatic: 0.7, // 静止摩擦
-            restitution: 0.02, // ほぼ跳ねない
-            density: 0.02,
-          },
-          false
-        );
-      });
-
-      // 複数パーツをまとめて1つの Body に
-      const body = Matter.Body.create({
-        parts,
-        label: "TargetImg",
-      });
-
-      // スリープしないように設定（止まったままにしたいなら有効）
-      Matter.Body.set(body, { sleepThreshold: Infinity });
-
-      // ワールドに追加（parts[0]やTargetImgではなく body）
-      Matter.World.add(engineRef.current.world, body);
-
-      setBlockCount((prev) => prev + 1);
-
-      // 精度調整
-      engineRef.current.positionIterations = 10;
-      engineRef.current.velocityIterations = 10;
-    };
-
-    // handleKeyDown: カウント中は無視、GameOver時はSpaceでrestart、それ以外はSpaceでspawn
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      // カウント中は無視
-      if (countdownRef.current !== null) return;
-
     const spawnTargetImg = async () => {
       // 処理中の場合は早期リターン
       if (isSpawning) {
@@ -286,9 +212,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
             centroid.y,
             [shiftedPolygon],
             {
-              isStatic: false,
-              friction: 0.1,
-              restitution: 0.3,
+              label: "TargetImg",
+              isStatic: true,
+              friction: 0.6,
+              frictionStatic: 0.7,
+              restitution: 0.02,
+              density: 0.02,
             }
           );
 
