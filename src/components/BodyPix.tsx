@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import * as tf from "@tensorflow/tfjs";
 import * as bodyPix from "@tensorflow-models/body-pix";
+import { saveCanvasToIndexedDB } from "../utils/db";
 
 // 定数
 const SEGMENTATION_CONFIG = {
@@ -200,65 +201,64 @@ const BodyPix: React.FC = () => {
     };
   }, [model, isVideoReady, runSegmentation]);
 
-  // 透過PNGとして保存
-  const handleSavePng = useCallback(() => {
-    if (!canvasRef.current || !model || !videoRef.current) return;
+  // IndexedDBに透過PNGを保存
+  const handleSaveToIndexedDB = useCallback(async () => {
+    if (!canvasRef.current || !model || !videoRef.current) {
+      alert('保存に必要な要素が準備できていません。');
+      return;
+    }
 
-    const video = videoRef.current;
-    const originalCanvas = canvasRef.current;
+    try {
+      const video = videoRef.current;
+      const originalCanvas = canvasRef.current;
 
-    // 保存用の一時的なcanvasを作成
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return;
+      // 保存用の一時的なcanvasを作成
+      const tempCanvas = document.createElement("canvas");
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) {
+        alert('Canvas コンテキストの取得に失敗しました。');
+        return;
+      }
 
-    tempCanvas.width = originalCanvas.width;
-    tempCanvas.height = originalCanvas.height;
+      tempCanvas.width = originalCanvas.width;
+      tempCanvas.height = originalCanvas.height;
 
-    // セグメンテーション実行（保存用）
-    model
-      .segmentPerson(video)
-      .then((segmentation) => {
-        // 元の映像を描画
-        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+      // セグメンテーション実行（保存用）
+      const segmentation = await model.segmentPerson(video);
+      
+      // 元の映像を描画
+      tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
 
-        // ImageDataを取得してピクセル操作
-        const imageData = tempCtx.getImageData(
-          0,
-          0,
-          tempCanvas.width,
-          tempCanvas.height
-        );
-        const data = imageData.data; // RGBA配列
-        const mask = segmentation.data; // セグメンテーション結果（0 or 1）
+      // ImageDataを取得してピクセル操作
+      const imageData = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height
+      );
+      const data = imageData.data; // RGBA配列
+      const mask = segmentation.data; // セグメンテーション結果（0 or 1）
 
-        // 背景部分（mask[i] === 0）を透明にする
-        for (let i = 0; i < mask.length; i++) {
-          if (mask[i] === 0) {
-            // 背景ピクセルのアルファ値を0に設定（透明）
-            data[i * 4 + 3] = 0;
-          }
-          // 人物部分（mask[i] === 1）はそのまま（不透明）
+      // 背景部分（mask[i] === 0）を透明にする
+      for (let i = 0; i < mask.length; i++) {
+        if (mask[i] === 0) {
+          // 背景ピクセルのアルファ値を0に設定（透明）
+          data[i * 4 + 3] = 0;
         }
+        // 人物部分（mask[i] === 1）はそのまま（不透明）
+      }
 
-        // 加工したImageDataを戻す
-        tempCtx.putImageData(imageData, 0, 0);
+      // 加工したImageDataを戻す
+      tempCtx.putImageData(imageData, 0, 0);
 
-        // 透過PNGとして保存
-        tempCanvas.toBlob((blob) => {
-          if (!blob) return;
-
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `bodypix_transparent_${Date.now()}.png`;
-          link.click();
-          URL.revokeObjectURL(url);
-        }, "image/png");
-      })
-      .catch((error) => {
-        console.error("透過画像保存エラー:", error);
-      });
+      // IndexedDBに保存
+      const id = await saveCanvasToIndexedDB(tempCanvas);
+      alert(`画像がIndexedDBに保存されました！（ID: ${id}）`);
+      
+    } catch (error) {
+      console.error("IndexedDBへの保存エラー:", error);
+      alert('画像の保存に失敗しました。');
+    }
   }, [model]);
 
   // ステータス表示
@@ -278,31 +278,32 @@ const BodyPix: React.FC = () => {
   const isReady = model && isVideoReady && !modelError && !videoError;
 
   return (
-    <div>
-      {/* 非表示のビデオ要素（データソース） */}
-      <video
-        ref={videoRef}
-        style={{ position: "absolute", left: "-9999px" }}
-        muted
-        playsInline
-      />
+    <>
+      <div>
+        {/* 非表示のビデオ要素（データソース） */}
+        <video
+          ref={videoRef}
+          style={{ position: "absolute", left: "-9999px" }}
+          muted
+          playsInline
+        />
 
-      {/* セグメンテーション結果表示 */}
-      <div
-        style={{
-          ...CANVAS_STYLE,
-          display: "inline-block",
-        }}
-      >
-        <canvas ref={canvasRef} style={CANVAS_STYLE} />
+        {/* セグメンテーション結果表示 */}
+        <div
+          style={{
+            ...CANVAS_STYLE,
+            display: "inline-block",
+          }}
+        >
+          <canvas ref={canvasRef} style={CANVAS_STYLE} />
+        </div>
+
+        <p>状態: {getStatusText()}</p>
       </div>
-      
-      <button onClick={handleSavePng} disabled={!isReady}>
-        透過PNGを保存
+      <button onClick={handleSaveToIndexedDB} disabled={!isReady}>
+          IndexedDBに保存
       </button>
-
-      <p>状態: {getStatusText()}</p>
-    </div>
+    </>
   );
 };
 

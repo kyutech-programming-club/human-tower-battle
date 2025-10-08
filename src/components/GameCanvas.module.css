@@ -5,21 +5,31 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  position: relative; /* 子要素のabsoluteを基準に */
-
-  background: linear-gradient(to bottom, #87ceeb, #b0e0e6);
   position: relative;
+  background: linear-gradient(to bottom, #87ceeb, #b0e0e6);
 }
 
 .canvas-wrapper {
   position: relative;
+  width: 450px; 
+  height: 580px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
 
 .canvas {
   border: 2px solid black;
-  position: absolute;
+  position: relative;
   z-index: 1;
+}
+
+.bodypixWrapper {
+  position: absolute;
   top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2; /* canvasより上 */
 }
 
 .bodyPixOverlay {
