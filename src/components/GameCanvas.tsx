@@ -434,7 +434,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         <button onClick={restartGame} className={styles.restartButton}>
           RESTART
         </button>
-      )} */}
+      )}
 
       {/* ホーム画面に戻るボタン */}
       <button
