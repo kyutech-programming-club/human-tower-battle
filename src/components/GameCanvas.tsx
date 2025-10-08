@@ -123,6 +123,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     const engine = engineRef.current;
     const world = engine.world;
 
+        // stageFactory を決める
+    let stageFactory: StageFactory;
+    if (stage === "stage1") stageFactory = createStage1;
+    else if (stage === "stage2") stageFactory = createStage2;
+    else stageFactory = createStage3;
+
+    // 最初に stageObj を作成して ref に保持
+    stageObjRef.current = stageFactory(engineRef.current.world, ctx);
+
     const spawnTargetImg = async () => {
       // 処理中の場合は早期リターン
       if (isSpawning) {
@@ -250,15 +259,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         setIsSpawning(false); // 処理完了フラグをリセット
       }
     };
-    let stageFactory: StageFactory;
-    if (stage === "stage1") {
-      stageFactory = createStage1;
-    } else if (stage === "stage2") {
-      stageFactory = createStage2;
-    } else {
-      stageFactory = createStage3;
-    }
-    const stageObj = stageFactory(world, ctx);
 
     // スペースキーでブロック生成
     const handleKeyDown = async (e: KeyboardEvent) => {
@@ -477,7 +477,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         <canvas
           ref={canvasRef}
           width={450}
-          height={580}
+          height={634}
           className={styles.canvas}
         />
         <div className={styles.bodypixWrapper}>
