@@ -1,5 +1,5 @@
 import styles from "./GameCanvas.module.css";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import Matter from "matter-js";
 import BodyPix from "./BodyPix.tsx";
 import { useNavigate } from "react-router-dom";
@@ -48,6 +48,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   );
   const [currentImageId, setCurrentImageId] = useState<number | null>(null);
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null); // Object URLを保存
+
+  // 新規追加: 自動ブロック生成制御
+  const [autoBlockGeneration, setAutoBlockGeneration] = useState(false);
+  const [lastProcessedImageId, setLastProcessedImageId] = useState<
+    number | null
+  >(null);
 
   // 最新画像をプリロードするuseEffect
   useEffect(() => {
@@ -114,6 +120,200 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     };
   }, []); // 空の依存配列でアンマウント時のみ実行
 
+  // 新規追加: 自動ブロック生成機能
+  useEffect(() => {
+    if (!autoBlockGeneration) return;
+
+    console.log("GameCanvas自動ブロック生成モード開始");
+    const interval = setInterval(async () => {
+      try {
+        console.log("GameCanvas自動処理チェック中...");
+
+        // 最新画像IDを取得
+        const latestImageId = await getLatestImageIdFromIndexedDB();
+
+        if (latestImageId === null) {
+          console.log(
+            "IndexedDBに画像がありません（BodyPixで画像を保存してください）"
+          );
+          return;
+        }
+
+        // 新しい画像があるかチェック
+        if (
+          latestImageId !== lastProcessedImageId &&
+          !isSpawning &&
+          !isGameOver
+        ) {
+          console.log(
+            `新しい画像検出（ID: ${latestImageId}）→ブロック生成開始`
+          );
+
+          try {
+            await spawnTargetImg();
+            setLastProcessedImageId(latestImageId);
+            console.log("GameCanvas自動ブロック生成完了");
+          } catch (error) {
+            console.error("GameCanvasブロック生成エラー:", error);
+          }
+        } else if (latestImageId === lastProcessedImageId) {
+          console.log("GameCanvas新しい画像なし");
+        } else if (isSpawning) {
+          console.log("GameCanvasスポーン処理中のため待機");
+        } else if (isGameOver) {
+          console.log("GameCanvasゲームオーバー中のため待機");
+        }
+      } catch (error) {
+        console.error("GameCanvas自動処理エラー:", error);
+      }
+    }, 6000); // 6秒間隔でチェック
+
+    return () => {
+      console.log("GameCanvas自動ブロック生成モード停止");
+      clearInterval(interval);
+    };
+  }, [autoBlockGeneration, lastProcessedImageId, isSpawning, isGameOver]);
+
+  // 新規追加: 初期化時に現在の最新IDを設定
+  useEffect(() => {
+    const initializeLastProcessedId = async () => {
+      try {
+        const latestId = await getLatestImageIdFromIndexedDB();
+        setLastProcessedImageId(latestId);
+        console.log("GameCanvas初期化: 最新画像ID =", latestId);
+      } catch (error) {
+        console.error("GameCanvas初期化エラー:", error);
+      }
+    };
+
+    initializeLastProcessedId();
+  }, []);
+
+  // spawnTargetImg関数をuseCallbackとして独立
+  const spawnTargetImg = useCallback(async () => {
+    // 処理中の場合は早期リターン
+    if (isSpawning) {
+      console.log("処理中のため、スキップします");
+      return;
+    }
+
+    setIsSpawning(true);
+
+    try {
+      // まず最新の画像をチェック
+      const latestImageId = await getLatestImageIdFromIndexedDB();
+
+      if (latestImageId === null) {
+        console.error(
+          "画像がIndexedDBに保存されていません。先にBodyPixで画像を生成・保存してください。"
+        );
+        return;
+      }
+
+      // 現在のIDと異なる場合は最新画像をロード
+      let imageToUse = currentImageUrl;
+      let imageId = currentImageId;
+
+      if (latestImageId !== currentImageId) {
+        console.log(
+          `新しい画像を検出（ID: ${latestImageId}）、プリロード中...`
+        );
+        const newImageUrl = await getImageFromIndexedDB(latestImageId);
+        if (newImageUrl) {
+          const img = new Image();
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => {
+              setCurrentImageId(latestImageId);
+              setCurrentImageUrl(newImageUrl);
+              setImageMap((prev) => new Map(prev).set(latestImageId, img));
+              imageToUse = newImageUrl;
+              imageId = latestImageId;
+              console.log(`新しい画像ID ${latestImageId} のプリロード完了`);
+              resolve();
+            };
+            img.onerror = () =>
+              reject(new Error(`画像ID ${latestImageId} のロードに失敗`));
+            img.src = newImageUrl;
+          });
+        } else {
+          console.error(`画像ID ${latestImageId} の取得に失敗しました`);
+          return;
+        }
+      }
+
+      if (!imageToUse) {
+        console.error("使用可能な画像がありません。");
+        return;
+      }
+
+      const test = await recognizeBorder(imageToUse);
+      setEdgePoints(test);
+      console.log("recognizeBorder完了:", test.length, "points");
+
+      // CCW補正して [number, number][] に
+      const vertices: [number, number][] = ensureCCW(
+        test.map((p) => [p.x * scale, p.y * scale] as [number, number])
+      );
+      console.log("vertices生成完了:", vertices.length, "vertices");
+
+      // 凸分割
+      const convexPolygons: [number, number][][] = decomp.quickDecomp(vertices);
+      console.log("凸分割完了:", convexPolygons.length, "polygons");
+
+      // Matter.js の Vector[][] に変換
+      const matterPolygons: Matter.Vector[][] = convexPolygons.map((polygon) =>
+        polygon.map(([x, y]) => ({ x, y }))
+      );
+
+      // 各凸ポリゴンから Body を作成
+      const parts = matterPolygons.map((polygon, index) => {
+        const centroid = getCentroid(polygon);
+        const shiftedPolygon = polygon.map((v) => ({
+          x: v.x - centroid.x,
+          y: v.y - centroid.y,
+        }));
+
+        const body = Matter.Bodies.fromVertices(
+          centroid.x, // 各パートの重心位置
+          centroid.y,
+          [shiftedPolygon],
+          {
+            isStatic: false,
+            friction: 0.1,
+            restitution: 0.3,
+          }
+        );
+
+        console.log(`Part ${index} 生成完了:`, centroid);
+        return body;
+      });
+
+      // すべてのpartsを1つのcompound bodyに統合
+      const compoundBody = Matter.Body.create({
+        parts: parts,
+        label: "TargetImg",
+      });
+
+      // BodyにカスタムプロパティとしてimageIdを追加
+      (compoundBody as any).imageId = imageId;
+
+      // 統合されたbodyの位置を設定
+      Matter.Body.setPosition(compoundBody, { x: 225, y: 50 });
+
+      // 1つのcompound bodyをworldに追加
+      console.log("1つのcompound bodyをWorldに追加");
+      Matter.World.add(engineRef.current.world, compoundBody);
+      console.log("オブジェクト生成完了！");
+
+      engineRef.current.positionIterations = 10;
+      engineRef.current.velocityIterations = 10;
+    } catch (error) {
+      console.error("オブジェクト生成に失敗しました:", error);
+    } finally {
+      setIsSpawning(false); // 処理完了フラグをリセット
+    }
+  }, [isSpawning, currentImageUrl, currentImageId, scale, edgePoints]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -123,133 +323,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     const engine = engineRef.current;
     const world = engine.world;
 
-    const spawnTargetImg = async () => {
-      // 処理中の場合は早期リターン
-      if (isSpawning) {
-        console.log("処理中のため、スキップします");
-        return;
-      }
-
-      setIsSpawning(true);
-
-      try {
-        // まず最新の画像をチェック
-        const latestImageId = await getLatestImageIdFromIndexedDB();
-
-        if (latestImageId === null) {
-          console.error(
-            "画像がIndexedDBに保存されていません。先にBodyPixで画像を生成・保存してください。"
-          );
-          return;
-        }
-
-        // 現在のIDと異なる場合は最新画像をロード
-        let imageToUse = currentImageUrl;
-        let imageId = currentImageId;
-
-        if (latestImageId !== currentImageId) {
-          console.log(
-            `新しい画像を検出（ID: ${latestImageId}）、プリロード中...`
-          );
-          const newImageUrl = await getImageFromIndexedDB(latestImageId);
-          if (newImageUrl) {
-            const img = new Image();
-            await new Promise<void>((resolve, reject) => {
-              img.onload = () => {
-                setCurrentImageId(latestImageId);
-                setCurrentImageUrl(newImageUrl);
-                setImageMap((prev) => new Map(prev).set(latestImageId, img));
-                imageToUse = newImageUrl;
-                imageId = latestImageId;
-                console.log(`新しい画像ID ${latestImageId} のプリロード完了`);
-                resolve();
-              };
-              img.onerror = () =>
-                reject(new Error(`画像ID ${latestImageId} のロードに失敗`));
-              img.src = newImageUrl;
-            });
-          } else {
-            console.error(`画像ID ${latestImageId} の取得に失敗しました`);
-            return;
-          }
-        }
-
-        if (!imageToUse) {
-          console.error("使用可能な画像がありません。");
-          return;
-        }
-
-        const test = await recognizeBorder(imageToUse);
-        setEdgePoints(test);
-        console.log("recognizeBorder完了:", test.length, "points");
-
-        // CCW補正して [number, number][] に
-        const vertices: [number, number][] = ensureCCW(
-          test.map((p) => [p.x * scale, p.y * scale] as [number, number])
-        );
-        console.log("vertices生成完了:", vertices.length, "vertices");
-
-        // 凸分割
-        const convexPolygons: [number, number][][] =
-          decomp.quickDecomp(vertices);
-        console.log("凸分割完了:", convexPolygons.length, "polygons");
-
-        // Matter.js の Vector[][] に変換
-        const matterPolygons: Matter.Vector[][] = convexPolygons.map(
-          (polygon) => polygon.map(([x, y]) => ({ x, y }))
-        );
-
-        // 各凸ポリゴンから Body を作成
-        const parts = matterPolygons.map((polygon, index) => {
-          const centroid = getCentroid(polygon);
-          const shiftedPolygon = polygon.map((v) => ({
-            x: v.x - centroid.x,
-            y: v.y - centroid.y,
-          }));
-
-          const body = Matter.Bodies.fromVertices(
-            centroid.x, // 各パートの重心位置
-            centroid.y,
-            [shiftedPolygon],
-            {
-              label: "TargetImg",
-              isStatic: true,
-              friction: 0.6,
-              frictionStatic: 0.7,
-              restitution: 0.02,
-              density: 0.02,
-            }
-          );
-
-          console.log(`Part ${index} 生成完了:`, centroid);
-          return body;
-        });
-
-        // すべてのpartsを1つのcompound bodyに統合
-        const compoundBody = Matter.Body.create({
-          parts: parts,
-          label: "TargetImg",
-        });
-
-        // BodyにカスタムプロパティとしてimageIdを追加
-        (compoundBody as any).imageId = imageId;
-
-        // 統合されたbodyの位置を設定
-        Matter.Body.setPosition(compoundBody, { x: 225, y: 50 });
-
-        // 1つのcompound bodyをworldに追加
-        console.log("1つのcompound bodyをWorldに追加");
-        Matter.World.add(world, compoundBody);
-        console.log("オブジェクト生成完了！");
-
-        engine.positionIterations = 10;
-        engine.velocityIterations = 10;
-      } catch (error) {
-        console.error("オブジェクト生成に失敗しました:", error);
-      } finally {
-        setIsSpawning(false); // 処理完了フラグをリセット
-      }
-    };
+    // ステージ選択
     let stageFactory: StageFactory;
     if (stage === "stage1") {
       stageFactory = createStage1;
@@ -258,13 +332,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     } else {
       stageFactory = createStage3;
     }
-    const stageObj = stageFactory(world, ctx);
+    stageObjRef.current = stageFactory(world, ctx);
 
     // スペースキーでブロック生成
     const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.code === "Space" && !isGameOver && !isSpawning) {
-        // const block = new Block(position, 0, 60, 60, { restitution: 0.2 });
-        // blockManagerRef.current.addBlock(block, world);
+        console.log("スペースキー押下 → 手動ブロック生成");
         spawnTargetImg();
       }
     };
@@ -399,7 +472,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       window.removeEventListener("keydown", handleKeyDown);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [position, edgePoints, stage]);
+  }, [position, edgePoints, stage, spawnTargetImg]);
 
   // restartGame をコンポーネント内で定義（useEffect の外側で参照可能に）
   const restartGame = () => {
@@ -445,6 +518,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
     setBlockCount(0);
     blockCountRef.current = 0;
+
+    // 新規追加: 最新IDをリセット
+    setLastProcessedImageId(null);
 
     console.log(
       "restartGame finished; newEngine bodies:",
@@ -498,6 +574,58 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           )}
         </div>
       )}
+
+      {/* 新規追加: 自動ブロック生成制御UI */}
+      <div
+        style={{
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          zIndex: 10,
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          backgroundColor: "rgba(255,255,255,0.9)",
+          padding: "8px",
+          borderRadius: "4px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+        }}
+      >
+        <button
+          onClick={() => setAutoBlockGeneration(!autoBlockGeneration)}
+          style={{
+            fontSize: "14px",
+            padding: "6px 12px",
+            backgroundColor: autoBlockGeneration ? "#4CAF50" : "#f44336",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          自動ブロック生成: {autoBlockGeneration ? "ON" : "OFF"}
+        </button>
+
+        <div
+          style={{
+            fontSize: "12px",
+            color: "#666",
+            textAlign: "center",
+            lineHeight: "1.2",
+          }}
+        >
+          {autoBlockGeneration ? (
+            <>
+              <div>6秒間隔でチェック中</div>
+              <div style={{ fontSize: "10px", color: "#999" }}>
+                最新ID: {lastProcessedImageId ?? "未取得"}
+              </div>
+            </>
+          ) : (
+            "スペースキーで手動実行"
+          )}
+        </div>
+      </div>
 
       {/* ホーム画面に戻るボタン */}
       <button
