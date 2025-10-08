@@ -404,8 +404,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   return (
     <div className={styles.container}>
       <div className={styles.canvasWrapper}>
-        <canvas ref={canvasRef} width={450} height={580} className={styles.canvas} />
+        <canvas ref={canvasRef} width={450} height={650} className={styles.canvas} />
         <BodyPix />
+        {/* <BodyPixTest className={styles.bodyPixOverlay} /> */}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          top: "20px",
+          left: "20px",
+          backgroundColor: "rgba(255,255,255,0.8)",
+          padding: "8px 12px",
+          borderRadius: "8px",
+          fontWeight: "bold",
+        }}
+      >
+      <div className={styles.sky}>
+        <div className={`${styles.cloud} ${styles.cloud1}`}></div>
+        <div className={`${styles.cloud} ${styles.cloud2}`}></div>
+        <div className={`${styles.cloud} ${styles.cloud3}`}></div>
+      </div>
+        {/* ブロック数: {blockCount} */}
+
       </div>
       {isGameOver && (
         <div className={styles.gameOverOverlay}>

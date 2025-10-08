@@ -6,7 +6,9 @@
   justify-content: center;
   align-items: center;
   position: relative; /* 子要素のabsoluteを基準に */
-  background-color: #f0f0f0;
+
+  background: linear-gradient(to bottom, #87ceeb, #b0e0e6);
+  position: relative;
 }
 
 .canvas-wrapper {
@@ -17,11 +19,12 @@
   border: 2px solid black;
   position: absolute;
   z-index: 1;
+  top: 0;
 }
 
 .bodyPixOverlay {
   position: absolute;
-  top: 13px;
+  top: 0px;
   left: 200;
   width: 450;
   height: 337.5;
@@ -53,4 +56,72 @@
   color: white;
   font-size: 36px;
   font-weight: bold;
+}
+
+/* 空 */
+.sky {
+  background: linear-gradient(to bottom, #87ceeb, #b0e0e6);
+  height: 70%;
+  width: 100%;
+  position: relative;
+}
+
+/* 雲 */
+.cloud {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0.9;
+  animation: float 30s linear infinite;
+}
+
+.cloud::before,
+.cloud::after {
+  content: "";
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.cloud1 {
+  width: 100px;
+  height: 60px;
+  top: 40px;
+  left: 10%;
+  animation-delay: 0s;
+}
+
+.cloud1::before {
+  width: 60px;
+  height: 60px;
+  left: -30px;
+  top: 10px;
+}
+
+.cloud1::after {
+  width: 80px;
+  height: 50px;
+  left: 60px;
+  top: 20px;
+}
+
+.cloud2 {
+  width: 120px;
+  height: 70px;
+  top: 100px;
+  left: 60%;
+  animation-delay: 10s;
+}
+
+.cloud3 {
+  width: 90px;
+  height: 55px;
+  top: 180px;
+  left: 30%;
+  animation-delay: 20s;
+}
+
+@keyframes float {
+  0% { transform: translateX(-200px); }
+  100% { transform: translateX(120vw); }
 }
