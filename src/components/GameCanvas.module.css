@@ -1,0 +1,50 @@
+
+.container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative; /* 子要素のabsoluteを基準に */
+  background-color: #f0f0f0;
+}
+
+.canvas-wrapper {
+  position: relative;
+}
+
+.canvas {
+  border: 2px solid black;
+  position: absolute;
+  z-index: 1;
+}
+
+.bodyPixOverlay {
+  position: absolute;
+  top: 13px;
+  left: 200;
+  width: 450;
+  height: 337.5;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.restartButton {
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  padding: 10px 20px;
+  z-index: 10;
+  cursor: pointer;
+  background-color: #facc15;
+  border: none;
+  border-radius: 1rem;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.3);
+  transition: 0.2s;
+}
+
+.restartButton:hover {
+  background-color: #eab308;
+}

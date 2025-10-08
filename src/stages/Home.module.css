@@ -1,0 +1,8 @@
+/* li のデザイン */
+.scoreItem {
+  list-style: none;
+  padding: 0.3rem 0;
+  font-size: 1.1rem;
+  color: #333; /* 文字色 */
+  border-bottom: 1px solid #ddd; /* 下線で区切る */
+}
