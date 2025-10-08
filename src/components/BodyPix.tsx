@@ -132,6 +132,7 @@ const BodyPix: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafIdRef = useRef<number | undefined>(undefined);
+  const [autoSave, setAutoSave] = useState(false);
 
   const {
     model,
@@ -204,7 +205,7 @@ const BodyPix: React.FC = () => {
   // IndexedDBに透過PNGを保存
   const handleSaveToIndexedDB = useCallback(async () => {
     if (!canvasRef.current || !model || !videoRef.current) {
-      alert('保存に必要な要素が準備できていません。');
+      console.warn("保存に必要な要素が準備できていません。");
       return;
     }
 
@@ -216,7 +217,7 @@ const BodyPix: React.FC = () => {
       const tempCanvas = document.createElement("canvas");
       const tempCtx = tempCanvas.getContext("2d");
       if (!tempCtx) {
-        alert('Canvas コンテキストの取得に失敗しました。');
+        console.error("Canvas コンテキストの取得に失敗しました。");
         return;
       }
 
@@ -225,7 +226,7 @@ const BodyPix: React.FC = () => {
 
       // セグメンテーション実行（保存用）
       const segmentation = await model.segmentPerson(video);
-      
+
       // 元の映像を描画
       tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
 
@@ -253,11 +254,11 @@ const BodyPix: React.FC = () => {
 
       // IndexedDBに保存
       const id = await saveCanvasToIndexedDB(tempCanvas);
-      alert(`画像がIndexedDBに保存されました！（ID: ${id}）`);
-      
+      console.log(`画像がIndexedDBに保存されました！（ID: ${id}）`);
+      return id;
     } catch (error) {
       console.error("IndexedDBへの保存エラー:", error);
-      alert('画像の保存に失敗しました。');
+      throw error;
     }
   }, [model]);
 
@@ -276,6 +277,26 @@ const BodyPix: React.FC = () => {
   };
 
   const isReady = model && isVideoReady && !modelError && !videoError;
+
+  // 5秒間隔で自動保存
+  useEffect(() => {
+    if (!autoSave || !isReady) return;
+
+    console.log("BodyPix自動保存モード開始（5秒間隔）");
+    const interval = setInterval(async () => {
+      console.log("BodyPix自動保存実行中...");
+      try {
+        await handleSaveToIndexedDB();
+      } catch (error) {
+        console.error("BodyPix自動保存エラー:", error);
+      }
+    }, 5000);
+
+    return () => {
+      console.log("BodyPix自動保存モード停止");
+      clearInterval(interval);
+    };
+  }, [autoSave, isReady, handleSaveToIndexedDB]);
 
   return (
     <>
@@ -300,9 +321,67 @@ const BodyPix: React.FC = () => {
 
         <p>状態: {getStatusText()}</p>
       </div>
-      <button onClick={handleSaveToIndexedDB} disabled={!isReady}>
-          IndexedDBに保存
-      </button>
+
+      {/* UI部分を拡張 */}
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          marginTop: "8px",
+          flexDirection: "column",
+        }}
+      >
+        {/* 手動保存ボタン */}
+        <button
+          onClick={handleSaveToIndexedDB}
+          disabled={!isReady}
+          style={{
+            padding: "8px 16px",
+            fontSize: "14px",
+            backgroundColor: "#2196F3",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+          }}
+        >
+          手動保存
+        </button>
+
+        {/* 自動保存切り替え */}
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            fontSize: "14px",
+            cursor: isReady ? "pointer" : "not-allowed",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={autoSave}
+            onChange={(e) => setAutoSave(e.target.checked)}
+            disabled={!isReady}
+            style={{ cursor: isReady ? "pointer" : "not-allowed" }}
+          />
+          <span style={{ color: isReady ? "black" : "#999" }}>
+            自動保存（5秒間隔）
+            {autoSave && isReady ? " 🔄" : ""}
+          </span>
+        </label>
+
+        {/* 状態表示 */}
+        <div
+          style={{
+            fontSize: "12px",
+            textAlign: "center",
+            color: autoSave && isReady ? "green" : "#666",
+            fontWeight: autoSave && isReady ? "bold" : "normal",
+          }}
+        >
+          {autoSave && isReady ? "自動保存実行中" : "手動保存モード"}
+        </div>
+      </div>
     </>
   );
 };
