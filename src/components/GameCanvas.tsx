@@ -126,8 +126,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     else stageFactory = createStage3;
 
     // 最初に stageObj を作成して ref に保持
-    stageObjRef.current = stageFactory(engineRef.current.world, ctx);        
-        
+    stageObjRef.current = stageFactory(engineRef.current.world, ctx);
+
     const spawnTargetImg = async () => {
       const test = await recognizeBorder(Png);
       setEdgePoints(test);
@@ -147,48 +147,48 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
       // Body を生成
       const parts = matterPolygons.map((polygon) => {
-      const centroid = getCentroid(polygon);
-      const shiftedPolygon = polygon.map((v) => ({
-        x: v.x - centroid.x,
-        y: v.y - centroid.y,
-      }));
+        const centroid = getCentroid(polygon);
+        const shiftedPolygon = polygon.map((v) => ({
+          x: v.x - centroid.x,
+          y: v.y - centroid.y,
+        }));
 
-      return Matter.Bodies.fromVertices(
-        200 + centroid.x,
-        centroid.y,
-        [shiftedPolygon],
-        {
-          label: "TargetImg",
-          isStatic: false,
-          friction: 1.0,         // 最大動摩擦
-          frictionStatic: 1.0,   // 最大静止摩擦
-          restitution: 0,        // 反発なし
-          density: 0.01,
-        },
-        false
-      );
-    });
+        return Matter.Bodies.fromVertices(
+          200 + centroid.x,
+          centroid.y,
+          [shiftedPolygon],
+          {
+            label: "TargetImg",
+            isStatic: true,
+            friction: 0.6, // ブロック同士の摩擦
+            frictionStatic: 0.7, // 静止摩擦
+            restitution: 0.02, // ほぼ跳ねない
+            density: 0.02,
+          },
+          false
+        );
+      });
 
-    // 複数パーツをまとめて1つの Body に
-    const body = Matter.Body.create({
-      parts,
-      label: "TargetImg",
-    });
+      // 複数パーツをまとめて1つの Body に
+      const body = Matter.Body.create({
+        parts,
+        label: "TargetImg",
+      });
 
-    // スリープしないように設定（止まったままにしたいなら有効）
-    Matter.Body.set(body, { sleepThreshold: Infinity });
+      // スリープしないように設定（止まったままにしたいなら有効）
+      Matter.Body.set(body, { sleepThreshold: Infinity });
 
-    // ワールドに追加（parts[0]やTargetImgではなく body）
-    Matter.World.add(engineRef.current.world, body);
+      // ワールドに追加（parts[0]やTargetImgではなく body）
+      Matter.World.add(engineRef.current.world, body);
 
-    setBlockCount((prev) => prev + 1);
+      setBlockCount((prev) => prev + 1);
 
-    // 精度調整
-    engineRef.current.positionIterations = 10;
-    engineRef.current.velocityIterations = 10;
+      // 精度調整
+      engineRef.current.positionIterations = 10;
+      engineRef.current.velocityIterations = 10;
     };
 
-      // handleKeyDown: カウント中は無視、GameOver時はSpaceでrestart、それ以外はSpaceでspawn
+    // handleKeyDown: カウント中は無視、GameOver時はSpaceでrestart、それ以外はSpaceでspawn
     const handleKeyDown = async (e: KeyboardEvent) => {
       // カウント中は無視
       if (countdownRef.current !== null) return;
@@ -404,29 +404,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   return (
     <div className={styles.container}>
       <div className={styles.canvasWrapper}>
-        <canvas ref={canvasRef} width={450} height={650} className={styles.canvas} />
+        <canvas
+          ref={canvasRef}
+          width={450}
+          height={650}
+          className={styles.canvas}
+        />
         <BodyPix />
-        {/* <BodyPixTest className={styles.bodyPixOverlay} /> */}
+        <div className={styles.sky}>
+          <div className={`${styles.cloud} ${styles.cloud1}`}></div>
+          <div className={`${styles.cloud} ${styles.cloud2}`}></div>
+          <div className={`${styles.cloud} ${styles.cloud3}`}></div>
+        </div>
       </div>
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          left: "20px",
-          backgroundColor: "rgba(255,255,255,0.8)",
-          padding: "8px 12px",
-          borderRadius: "8px",
-          fontWeight: "bold",
-        }}
-      >
-      <div className={styles.sky}>
-        <div className={`${styles.cloud} ${styles.cloud1}`}></div>
-        <div className={`${styles.cloud} ${styles.cloud2}`}></div>
-        <div className={`${styles.cloud} ${styles.cloud3}`}></div>
-      </div>
-        {/* ブロック数: {blockCount} */}
 
-      </div>
       {isGameOver && (
         <div className={styles.gameOverOverlay}>
           <p className={styles.gameOverText}>GAME OVER</p>
