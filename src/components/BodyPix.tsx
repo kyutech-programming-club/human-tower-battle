@@ -1,102 +1,285 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import * as tf from "@tensorflow/tfjs";
 import * as bodyPix from "@tensorflow-models/body-pix";
 
-const BodyPixTest: React.FC = () => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [bodyPixNet, setBodyPixNet] = useState<bodyPix.BodyPix>(); // BodyPixモデル
+// 定数
+const SEGMENTATION_CONFIG = {
+  FOREGROUND_COLOR: { r: 0, g: 0, b: 0, a: 0 }, // 人物部分を透明に（元映像を表示）
+  BACKGROUND_COLOR: { r: 240, g: 240, b: 240, a: 255 }, // 背景を透明に
+  OPACITY: 1.0,
+  BLUR_AMOUNT: 2.0,
+  FLIP_HORIZONTAL: true,
+} as const;
 
-  // 初期化(最初の一回だけ)
+const CANVAS_STYLE = {
+  width: 450,
+  height: 300,
+} as const;
+
+// カスタムフック: BodyPixモデルの初期化
+const useBodyPixModel = () => {
+  const [model, setModel] = useState<bodyPix.BodyPix | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    const init = async () => {
-      // TensorFlow.js初期化
-      await tf.setBackend("webgl");
-      await tf.ready();
-
-      // BodyPixモデルロード
-      await bodyPix.load().then((net: bodyPix.BodyPix) => setBodyPixNet(net));
-
-      // カメラストリームを直接 video にアタッチ
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+    const initializeModel = async () => {
+      try {
+        await tf.setBackend("webgl");
+        await tf.ready();
+        const net = await bodyPix.load();
+        setModel(net);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "モデルの読み込みに失敗しました"
+        );
+      } finally {
+        setIsLoading(false);
       }
     };
-    init();
+
+    initializeModel();
   }, []);
 
-  // セグメンテーション実行
-  const runSegmentation = async () => {
-    if (
-      bodyPixNet &&
-      videoRef.current &&
-      canvasRef.current
-    ) {
-      const video = videoRef.current
-      const canvas = canvasRef.current;
+  return { model, isLoading, error };
+};
 
-      if (!video.videoWidth || !video.videoHeight) return;
+// カスタムフック: カメラストリームの初期化
+const useVideoStream = (videoRef: React.RefObject<HTMLVideoElement | null>) => {
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-      // 1) 論理サイズを動画に合わせる
-      if (
-        canvas.width !== video.videoWidth ||
-        canvas.height !== video.videoHeight
-      ) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+  useEffect(() => {
+    let isMounted = true; // コンポーネントがマウントされているかを追跡
+
+    const initializeVideo = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+
+        if (!isMounted) return; // アンマウント後は処理しない
+
+        if (videoRef.current) {
+          const video = videoRef.current;
+
+          // 既存のストリームがある場合は停止
+          if (video.srcObject) {
+            const existingStream = video.srcObject as MediaStream;
+            existingStream.getTracks().forEach((track) => track.stop());
+          }
+
+          video.srcObject = stream;
+
+          // loadedmetadataイベントを待ってからplay()を実行
+          const handleLoadedMetadata = async () => {
+            if (!isMounted) return;
+
+            try {
+              await video.play();
+              if (isMounted) {
+                setIsVideoReady(true);
+              }
+            } catch (playError) {
+              if (isMounted) {
+                setError(
+                  playError instanceof Error
+                    ? playError.message
+                    : "ビデオの再生に失敗しました"
+                );
+              }
+            }
+          };
+
+          if (video.readyState >= 1) {
+            // メタデータが既に読み込まれている場合
+            handleLoadedMetadata();
+          } else {
+            // メタデータの読み込みを待つ
+            video.addEventListener("loadedmetadata", handleLoadedMetadata, {
+              once: true,
+            });
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(
+            err instanceof Error ? err.message : "カメラの初期化に失敗しました"
+          );
+        }
       }
+    };
 
-      // 2) 推論
-      const segmentation = await bodyPixNet.segmentPerson(video);
+    initializeVideo();
 
-      // 3) 背景を白で塗りつぶす見た目にするマスク
-      const foregroundColor = { r: 0, g: 0, b: 0, a: 0 }; // 人物部分を透明に
-      const backgroundColor = { r: 255, g: 255, b: 255, a: 255 }; // 背景を白に
+    // クリーンアップ
+    return () => {
+      isMounted = false;
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => track.stop());
+        videoRef.current.srcObject = null;
+      }
+    };
+  }, [videoRef]);
+
+  return { isVideoReady, error };
+};
+
+const BodyPix: React.FC = () => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafIdRef = useRef<number | undefined>(undefined);
+
+  const {
+    model,
+    isLoading: isModelLoading,
+    error: modelError,
+  } = useBodyPixModel();
+  const { isVideoReady, error: videoError } = useVideoStream(videoRef);
+
+  // セグメンテーション実行
+  const runSegmentation = useCallback(async () => {
+    if (!model || !videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video.videoWidth || !video.videoHeight) return;
+
+    // キャンバスサイズを動画に合わせる
+    if (
+      canvas.width !== video.videoWidth ||
+      canvas.height !== video.videoHeight
+    ) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+
+    try {
+      // セグメンテーション実行
+      const segmentation = await model.segmentPerson(video);
+
+      // マスク作成
       const mask = bodyPix.toMask(
         segmentation,
-        foregroundColor, // 人物
-        backgroundColor // 背景
+        SEGMENTATION_CONFIG.FOREGROUND_COLOR,
+        SEGMENTATION_CONFIG.BACKGROUND_COLOR
       );
 
-      // 4) 合成（flip は mirrored に合わせて true）
+      // 結果を描画
       bodyPix.drawMask(
         canvas,
         video,
         mask,
-        1.0, // opacity: マスクを完全反映
-        0, // maskBlurAmount: 0=輪郭くっきり
-        true // flipHorizontal
+        SEGMENTATION_CONFIG.OPACITY,
+        SEGMENTATION_CONFIG.BLUR_AMOUNT,
+        SEGMENTATION_CONFIG.FLIP_HORIZONTAL
       );
+    } catch (error) {
+      console.error("セグメンテーション実行エラー:", error);
     }
-  };
+  }, [model]);
 
-  // リアルタイムセグメンテーション
+  // リアルタイムセグメンテーションのループ
   useEffect(() => {
-    let rafId: number;
+    if (!model || !isVideoReady) return;
 
     const loop = () => {
       runSegmentation();
-      rafId = requestAnimationFrame(loop); // 描画タイミングに合わせて実行
+      rafIdRef.current = requestAnimationFrame(loop);
     };
 
-    if (bodyPixNet) {
-      loop();
-    }
+    loop();
 
     return () => {
-      if (rafId) {
-        cancelAnimationFrame(rafId); // クリーンアップ
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
       }
     };
-  }, [bodyPixNet]);
+  }, [model, isVideoReady, runSegmentation]);
+
+  // 透過PNGとして保存
+  const handleSavePng = useCallback(() => {
+    if (!canvasRef.current || !model || !videoRef.current) return;
+
+    const video = videoRef.current;
+    const originalCanvas = canvasRef.current;
+
+    // 保存用の一時的なcanvasを作成
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) return;
+
+    tempCanvas.width = originalCanvas.width;
+    tempCanvas.height = originalCanvas.height;
+
+    // セグメンテーション実行（保存用）
+    model
+      .segmentPerson(video)
+      .then((segmentation) => {
+        // 元の映像を描画
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        // ImageDataを取得してピクセル操作
+        const imageData = tempCtx.getImageData(
+          0,
+          0,
+          tempCanvas.width,
+          tempCanvas.height
+        );
+        const data = imageData.data; // RGBA配列
+        const mask = segmentation.data; // セグメンテーション結果（0 or 1）
+
+        // 背景部分（mask[i] === 0）を透明にする
+        for (let i = 0; i < mask.length; i++) {
+          if (mask[i] === 0) {
+            // 背景ピクセルのアルファ値を0に設定（透明）
+            data[i * 4 + 3] = 0;
+          }
+          // 人物部分（mask[i] === 1）はそのまま（不透明）
+        }
+
+        // 加工したImageDataを戻す
+        tempCtx.putImageData(imageData, 0, 0);
+
+        // 透過PNGとして保存
+        tempCanvas.toBlob((blob) => {
+          if (!blob) return;
+
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `bodypix_transparent_${Date.now()}.png`;
+          link.click();
+          URL.revokeObjectURL(url);
+        }, "image/png");
+      })
+      .catch((error) => {
+        console.error("透過画像保存エラー:", error);
+      });
+  }, [model]);
+
+  // ステータス表示
+  const getStatusText = () => {
+    if (modelError || videoError) {
+      return `エラー: ${modelError || videoError}`;
+    }
+    if (isModelLoading) {
+      return "モデル読み込み中...";
+    }
+    if (!isVideoReady) {
+      return "カメラ初期化中...";
+    }
+    return "準備完了";
+  };
+
+  const isReady = model && isVideoReady && !modelError && !videoError;
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>BodyPix人物セグメンテーション</h2>
-
-      {/* video（非表示・データソースとして使用） */}
+    <div>
+      {/* 非表示のビデオ要素（データソース） */}
       <video
         ref={videoRef}
         style={{ position: "absolute", left: "-9999px" }}
@@ -105,11 +288,22 @@ const BodyPixTest: React.FC = () => {
       />
 
       {/* セグメンテーション結果表示 */}
-      <canvas ref={canvasRef} style={{ width: 640, height: 480 }} />
+      <div
+        style={{
+          ...CANVAS_STYLE,
+          display: "inline-block",
+        }}
+      >
+        <canvas ref={canvasRef} style={CANVAS_STYLE} />
+      </div>
+      
+      <button onClick={handleSavePng} disabled={!isReady}>
+        透過PNGを保存
+      </button>
 
-      <p>状態: {bodyPixNet ? "準備完了" : "モデル読み込み中..."}</p>
+      <p>状態: {getStatusText()}</p>
     </div>
   );
 };
 
-export default BodyPixTest;
+export default BodyPix;
