@@ -9,8 +9,19 @@ export function createStage1(
   const groundHeight = 20;
   const groundX = 225;
   const groundY = 530 - groundHeight / 2;
-  const ground = Matter.Bodies.rectangle(groundX, groundY, groundWidth, groundHeight, { isStatic: true });
-
+  const ground = Matter.Bodies.rectangle(
+    groundX,
+    groundY,
+    groundWidth,
+    groundHeight,
+    {
+      isStatic: true,
+      friction: 1.0, // 最大摩擦
+      frictionStatic: 1.0, // 静止摩擦
+      restitution: 0, // 反発なし
+      label: "floor",
+    }
+  );
 
   Matter.World.add(world, [ground]);
 
