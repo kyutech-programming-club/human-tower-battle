@@ -27,10 +27,30 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const engineRef = useRef(Matter.Engine.create());
   const navigate = useNavigate();
   const blockManagerRef = useRef(new BlockManager());
+
+  // refs to avoid stale-closure issues
+  const stageObjRef = useRef<{ draw: () => void } | null>(null);
+  const isGameOverRef = useRef<boolean>(false);
+  const countdownRef = useRef<number | null>(null);
+  const blockCountRef = useRef<number>(0);
+
   const [isGameOver, setIsGameOver] = useState(false);
+  const [blockCount, setBlockCount] = useState(0);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [position, setPosition] = useState(400);
   const scale = 0.05;
   const [edgePoints, setEdgePoints] = useState<{ x: number; y: number }[]>([]);
+
+  // keep refs in sync with state
+  useEffect(() => {
+    isGameOverRef.current = isGameOver;
+  }, [isGameOver]);
+  useEffect(() => {
+    countdownRef.current = countdown;
+  }, [countdown]);
+  useEffect(() => {
+    blockCountRef.current = blockCount;
+  }, [blockCount]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -99,7 +119,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     //   // Matter.World.add(engineRef.current.world, [TargetImg]);
     // };
 
-    // ステージ選択
+    // stageFactory を決める
+    let stageFactory: StageFactory;
+    if (stage === "stage1") stageFactory = createStage1;
+    else if (stage === "stage2") stageFactory = createStage2;
+    else stageFactory = createStage3;
+
+    // 最初に stageObj を作成して ref に保持
+    stageObjRef.current = stageFactory(engineRef.current.world, ctx);        
+        
     const spawnTargetImg = async () => {
       const test = await recognizeBorder(Png);
       setEdgePoints(test);
@@ -119,77 +147,88 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
       // Body を生成
       const parts = matterPolygons.map((polygon) => {
-        const centroid = getCentroid(polygon);
-        const shiftedPolygon = polygon.map((v) => ({
-          x: v.x - centroid.x,
-          y: v.y - centroid.y,
-        }));
+      const centroid = getCentroid(polygon);
+      const shiftedPolygon = polygon.map((v) => ({
+        x: v.x - centroid.x,
+        y: v.y - centroid.y,
+      }));
 
-        return Matter.Bodies.fromVertices(
-          200 + centroid.x,
-          centroid.y,
-          [shiftedPolygon],
-          {
-            label: "TargetImg",
-            isStatic: false,
-            friction: 0,
-            restitution: 0,
-          }
-        );
-      });
-      // 全部まとめて1つの Body に
-      const body = Matter.Body.create({
-        parts,
-        label: "TargetImg",
-      });
-      Matter.Body.set(body, { sleepThreshold: Infinity });
-      Matter.World.add(world, parts[0]);
-      engine.positionIterations = 10;
-      engine.velocityIterations = 10;
+      return Matter.Bodies.fromVertices(
+        200 + centroid.x,
+        centroid.y,
+        [shiftedPolygon],
+        {
+          label: "TargetImg",
+          isStatic: false,
+          friction: 1.0,         // 最大動摩擦
+          frictionStatic: 1.0,   // 最大静止摩擦
+          restitution: 0,        // 反発なし
+          density: 0.01,
+        },
+        false
+      );
+    });
+
+    // 複数パーツをまとめて1つの Body に
+    const body = Matter.Body.create({
+      parts,
+      label: "TargetImg",
+    });
+
+    // スリープしないように設定（止まったままにしたいなら有効）
+    Matter.Body.set(body, { sleepThreshold: Infinity });
+
+    // ワールドに追加（parts[0]やTargetImgではなく body）
+    Matter.World.add(engineRef.current.world, body);
+
+    setBlockCount((prev) => prev + 1);
+
+    // 精度調整
+    engineRef.current.positionIterations = 10;
+    engineRef.current.velocityIterations = 10;
     };
-    let stageFactory: StageFactory;
-    if (stage === "stage1") {
-      stageFactory = createStage1;
-    } else if(stage === "stage2") {
-      stageFactory = createStage2;
-    } else {
-      stageFactory = createStage3;
-    }
-    const stageObj = stageFactory(world, ctx);
 
-    // スペースキーでブロック生成
+      // handleKeyDown: カウント中は無視、GameOver時はSpaceでrestart、それ以外はSpaceでspawn
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (e.code === "Space" && !isGameOver) {
-        // const block = new Block(position, 0, 60, 60, { restitution: 0.2 });
-        // blockManagerRef.current.addBlock(block, world);
-        spawnTargetImg();
-      }
-      if (e.key === "ArrowLeft") {
-        setPosition((prev) => {
-          const newPos = prev - 10;
-          console.log("new position:", newPos);
-          return newPos;
-        });
+      // カウント中は無視
+      if (countdownRef.current !== null) return;
+
+      if (isGameOverRef.current) {
+        if (e.code === "Space") {
+          restartGame();
+        }
+        return;
       }
 
-      if (e.key === "ArrowRight") {
-        setPosition((prev) => {
-          const newPos = prev + 10;
-          console.log("new position:", newPos);
-          return newPos;
-        });
+      if (e.code === "Space") {
+        // spawnTargetImgは内部で async 処理をするが、ここで await する必要はない
+        // await spawnTargetImg(); // optional
+        spawnTargetImg();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
 
     const update = () => {
-      Matter.Engine.update(engine, 1000 / 60);
+      const engine = engineRef.current;
+      const world = engine.world;
+
+      // 物理を進めるかどうか
+      if (!isGameOverRef.current) {
+        Matter.Engine.update(engine, 1000 / 60);
+      }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // ブロックカウント表示
+      ctx.fillStyle = "black";
+      ctx.font = "20px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(`人数: ${blockCountRef.current}人`, 10, 30);
+
       // ステージ描画
-      stageObj.draw();
+      stageObjRef.current?.draw();
+
       // ブロック描画
       ctx.fillStyle = "blue";
       blockManagerRef.current.blocks.forEach((b) => {
@@ -201,6 +240,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         ctx.restore();
       });
 
+      // world 内の TargetImg を描画
       world.bodies.forEach((body) => {
         const img = new Image();
         img.src = Png;
@@ -219,7 +259,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
           // Body全体の中心に画像を合わせる
           const centroid = getAveragePoint(edgePoints);
-
           ctx.drawImage(
             img,
             -centroid.x * scale,
@@ -247,12 +286,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         });
       });
 
-      // 画面外ブロック削除 & GAME OVER判定
-      if (!isGameOver) {
-        // ブロックと world.bodies を一括で画面外判定
+      // 画面外ブロック削除 & GAME OVER判定（毎フレーム最新の world を参照）
+      if (!isGameOverRef.current) {
         const bodiesToCheck = [
           ...blockManagerRef.current.blocks.map((b) => b.body),
-          ...world.bodies.filter(
+          ...engineRef.current.world.bodies.filter(
             (b) => b.label === "TargetImg" || b.label === "pointCloud"
           ),
         ];
@@ -264,45 +302,33 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
             pos.x < -10 ||
             pos.x > canvas.width + 10
           ) {
-            // ブロックなら manager からも削除
             const block = blockManagerRef.current.blocks.find(
               (b) => b.body === body
             );
             if (block) {
-              blockManagerRef.current.removeBlock(block, world);
+              blockManagerRef.current.removeBlock(
+                block,
+                engineRef.current.world
+              );
             } else {
-              // TargetImg や pointCloud は world から直接削除
-              Matter.World.remove(world, body);
+              Matter.World.remove(engineRef.current.world, body);
             }
+            // GAME OVER
             setIsGameOver(true);
+            isGameOverRef.current = true;
           }
         });
-
-        // blockManagerRef.current.blocks = blockManagerRef.current.blocks.filter(
-        //   (b) => {
-        //     const pos = b.body.position;
-        //     if (
-        //       pos.y > canvas.height + 50 ||
-        //       pos.x < -50 ||
-        //       pos.x > canvas.width + 50
-        //     ) {
-        //       blockManagerRef.current.removeBlock(b, world);
-        //       setIsGameOver(true);
-        //       return false;
-        //     }
-        //     return true;
-        //   }
-        // );
       }
 
-      if (isGameOver) {
-        ctx.fillStyle = "red";
-        ctx.font = "40px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
-      } else {
-        animationFrameId = requestAnimationFrame(update);
-      }
+      // // GAME OVER 表示（ループは止めない）
+      // if (isGameOverRef.current) {
+      //   ctx.fillStyle = "red";
+      //   ctx.font = "40px sans-serif";
+      //   ctx.textAlign = "center";
+      //   ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+      // }
+
+      animationFrameId = requestAnimationFrame(update);
     };
 
     update();
@@ -311,13 +337,76 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       window.removeEventListener("keydown", handleKeyDown);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isGameOver, position, edgePoints]);
+  }, [position, edgePoints, stage]);
 
+  // 自動リスタート処理
+  useEffect(() => {
+    if (isGameOver) {
+      setCountdown(3);
+      const interval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(interval);
+            restartGame();
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isGameOver]);
+
+  // restartGame をコンポーネント内で定義（useEffect の外側で参照可能に）
   const restartGame = () => {
+    console.log("=== restartGame called ===");
+
+    const oldEngine = engineRef.current;
+    try {
+      if (oldEngine) {
+        Matter.World.clear(oldEngine.world, true);
+        Matter.Engine.clear(oldEngine);
+      }
+    } catch (err) {
+      console.warn("World clear warning:", err);
+    }
+
+    try {
+      blockManagerRef.current.removeAll(oldEngine?.world);
+    } catch (e) {
+      // ignore
+    }
+    blockManagerRef.current.blocks = [];
+
     const newEngine = Matter.Engine.create();
-    blockManagerRef.current.removeAll(engineRef.current.world);
     engineRef.current = newEngine;
+
+    // stage を再作成
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (ctx) {
+      let stageFactory: StageFactory;
+      if (stage === "stage1") stageFactory = createStage1;
+      else if (stage === "stage2") stageFactory = createStage2;
+      else stageFactory = createStage3;
+
+      stageObjRef.current = stageFactory(newEngine.world, ctx);
+    }
+
     setIsGameOver(false);
+    isGameOverRef.current = false;
+
+    setCountdown(null);
+    countdownRef.current = null;
+
+    setBlockCount(0);
+    blockCountRef.current = 0;
+
+    console.log(
+      "restartGame finished; newEngine bodies:",
+      engineRef.current.world.bodies.length
+    );
   };
 
   return (
