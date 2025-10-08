@@ -179,18 +179,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           return;
         }
 
-        const { points, rect, size } = await recognizeBorder(imageToUse);
+        const { points, rect, size, centroid } = await recognizeBorder(imageToUse);
         setEdgePoints(points);
         console.log("recognizeBorder完了:", points.length, "points");
 
-        // 表示倍率（縦横同スケールの場合）
-        const sx = scale;
-        const sy = scale;
-        // ※ 縦横比が変わる描画なら
-        // const sx = displayedWidth  / size.w;
-        // const sy = displayedHeight / size.h;
+        // 表示倍率（画面でどのサイズで見せるか）
+        const desiredDisplayedWidth  = 200;                        // ←お好みで
+        const desiredDisplayedHeight = (desiredDisplayedWidth * size.h) / size.w; // アスペクト維持
+        const sx = desiredDisplayedWidth  / size.w;                // 画像px → 画面px の倍率
+        const sy = desiredDisplayedHeight / size.h;
 
-        // CCW補正して [number, number][] に
+        // CCW補正 → ワールド座標へ（= 表示倍率でスケール）
         const vertices: [number, number][] = ensureCCW(
           points.map((p) => [p.x * sx, p.y * sy] as [number, number])
         );
@@ -200,12 +199,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         const convexPolygons: [number, number][][] = decomp.quickDecomp(vertices);
         console.log("凸分割完了:", convexPolygons.length, "polygons");
 
-        // Matter.js の Vector[][] に変換
+        // Matter.Vector[][] に変換
         const matterPolygons: Matter.Vector[][] = convexPolygons.map(
           (polygon) => polygon.map(([x, y]) => ({ x, y }))
         );
 
-        // 各凸ポリゴンから Body を作成（重心原点にシフト）
+        // 各パートを重心原点にシフトして作成
         const parts = matterPolygons.map((polygon, index) => {
           const centroid = getCentroid(polygon);
           const shifted = polygon.map((v) => ({ x: v.x - centroid.x, y: v.y - centroid.y }));
@@ -215,7 +214,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
             [shifted],
             {
               label: "TargetImg",
-              isStatic: true,
+              isStatic: false,          // ← 落ちてくるので動的
               friction: 0.6,
               frictionStatic: 0.7,
               restitution: 0.02,
@@ -226,31 +225,34 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           return body;
         });
 
-        // compound body作成
+        // compound body
         const compoundBody = Matter.Body.create({ parts, label: "TargetImg" });
         (compoundBody as any).imageId = imageId;
 
-        // === ここがズレ対策の肝 ===
-        // 画像の画面上の左上（ピクセル座標）
-        const imgX = /* 画像を描いている左上X */ 225; // ←実際の描画先に合わせて
-        const imgY = /* 画像を描いている左上Y */ 50;  // ←実際の描画先に合わせて
+        // ── ここが sprite 方式の肝 ──
+        // 画像の「見えてる形」（最大輪郭）の重心をスプライト基準点にする（0〜1の比率）
+        const xOffset = centroid.x / size.w;
+        const yOffset = centroid.y / size.h;
 
-        // 「見えている形」の左上 = 画像左上 + rect左上 * 表示スケール
-        const shapeTopLeft = { x: imgX + rect.x * sx, y: imgY + rect.y * sy };
+        compoundBody.render.sprite = {
+          texture: imageToUse, // 元画像URL
+          xScale: sx,          // 元画像pxに対する拡大率
+          yScale: sy,
+          xOffset,             // テクスチャ幅に対する割合（0〜1）
+          yOffset,             // テクスチャ高に対する割合（0〜1）
+        };
 
-        // いったんワールド原点近くに置いてから……
-        Matter.Body.setPosition(compoundBody, { x: 0, y: 0 });
+        // 生成（スポーン）位置を“中心”で決める（AABB左上合わせは不要）
+        const spawnX = 200;
+        const spawnY = 80; // 画面上部から落とす
+        Matter.Body.setPosition(compoundBody, { x: spawnX, y: spawnY });
 
-        // ボディのAABB左上と "見えている形" の左上を一致させる
-        const bmin = compoundBody.bounds.min;
-        Matter.Body.translate(compoundBody, {
-          x: shapeTopLeft.x - bmin.x,
-          y: shapeTopLeft.y - bmin.y,
-        });
+        // ちょっと回転させて落としたい場合
+        // Matter.Body.setAngle(compoundBody, 0.1);
 
-        // 追加
+        // 物理世界へ追加
         Matter.World.add(world, compoundBody);
-        console.log("1つのcompound bodyをWorldに追加 / オブジェクト生成完了！");
+        console.log("sprite方式でWorldに追加 / オブジェクト生成完了！");
 
         // engine.positionIterations = 10;
         // engine.velocityIterations = 10;
@@ -338,32 +340,39 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         ctx.translate(body.position.x, body.position.y);
         ctx.rotate(body.angle);
 
-        // Body全体の中心に画像を合わせる
-        const centroid = getAveragePoint(edgePoints);
+        // スプライトに保存した拡大率と基準点（0〜1）を使って画像を原点合わせ
+        const sprite = (body as any).render?.sprite || {};
+        const xScale = typeof sprite.xScale === "number" ? sprite.xScale : 1;
+        const yScale = typeof sprite.yScale === "number" ? sprite.yScale : 1;
+        const xOff = typeof sprite.xOffset === "number" ? sprite.xOffset : 0.5;
+        const yOff = typeof sprite.yOffset === "number" ? sprite.yOffset : 0.5;
+
+        const imgCx = xOff * image.width;
+        const imgCy = yOff * image.height;
 
         ctx.drawImage(
           image,
-          -centroid.x * scale,
-          -centroid.y * scale,
-          image.width * scale,
-          image.height * scale
+          -imgCx * xScale,
+          -imgCy * yScale,
+          image.width * xScale,
+          image.height * yScale
         );
 
         ctx.restore();
 
         // 当たり判定（子パーツ）はそのまま描画
         body.parts.forEach((part) => {
-          // if (part.id === body.id) return;
+          if (part.id === body.id) return;
 
-          // ctx.strokeStyle = "rgba(0,0,255,0.5)";
-          // ctx.lineWidth = 2;
-          // ctx.beginPath();
-          // part.vertices.forEach((v, i) => {
-          //   if (i === 0) ctx.moveTo(v.x, v.y);
-          //   else ctx.lineTo(v.x, v.y);
-          // });
-          // ctx.closePath();
-          // ctx.stroke();
+          ctx.strokeStyle = "rgba(0,0,255,0.5)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          part.vertices.forEach((v, i) => {
+            if (i === 0) ctx.moveTo(v.x, v.y);
+            else ctx.lineTo(v.x, v.y);
+          });
+          ctx.closePath();
+          ctx.stroke();
         });
       } // ← for...ofループを閉じる
 

@@ -3,6 +3,7 @@ type BorderResult = {
   points: Point[];                        // 最大輪郭の点列（CCW保証は呼び出し側で）
   rect: { x: number; y: number; w: number; h: number }; // 最大輪郭の外接矩形（元画像座標系）
   size: { w: number; h: number };        // 元画像のサイズ
+  centroid: { x: number; y: number };    // 最大輪郭の重心（元画像座標系）
 };
 
 export async function recognizeBorder(im: string): Promise<BorderResult> {
@@ -67,8 +68,16 @@ export async function recognizeBorder(im: string): Promise<BorderResult> {
           // 何も見つからない場合は空を返す
           src.delete(); alpha.delete(); alphaBlur.delete(); bin.delete();
           contours.delete(); hierarchy.delete();
-          resolve({ points: [], rect: { x: 0, y: 0, w: img.width, h: img.height }, size: { w: img.width, h: img.height } });
+          resolve({ points: [], rect: { x: 0, y: 0, w: img.width, h: img.height }, size: { w: img.width, h: img.height }, centroid: { x: 0, y: 0 } });
           return;
+        }
+
+        // 画像上の輪郭の重心（スプライト基準点に使用）
+        const moments = cv.moments(largest, /*binaryImage=*/ false);
+        let cx = 0, cy = 0;
+        if (moments.m00 !== 0) {
+          cx = moments.m10 / moments.m00;
+          cy = moments.m01 / moments.m00;
         }
 
         // --- [改善点3] 簡略化はかなり弱め or スキップ ---
@@ -116,6 +125,7 @@ export async function recognizeBorder(im: string): Promise<BorderResult> {
           points: pts,
           rect: { x: rectCv.x, y: rectCv.y, w: rectCv.width, h: rectCv.height },
           size: { w: img.width, h: img.height },
+          centroid: { x: cx, y: cy },
         });
       } catch (err) {
         reject(err);
