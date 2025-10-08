@@ -320,14 +320,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         });
       }
 
-      // // GAME OVER 表示（ループは止めない）
-      // if (isGameOverRef.current) {
-      //   ctx.fillStyle = "red";
-      //   ctx.font = "40px sans-serif";
-      //   ctx.textAlign = "center";
-      //   ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
-      // }
-
       animationFrameId = requestAnimationFrame(update);
     };
 
@@ -338,25 +330,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       cancelAnimationFrame(animationFrameId);
     };
   }, [position, edgePoints, stage]);
-
-  // 自動リスタート処理
-  useEffect(() => {
-    if (isGameOver) {
-      setCountdown(3);
-      const interval = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev === null) return null;
-          if (prev <= 1) {
-            clearInterval(interval);
-            restartGame();
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [isGameOver]);
 
   // restartGame をコンポーネント内で定義（useEffect の外側で参照可能に）
   const restartGame = () => {
@@ -409,31 +382,38 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     );
   };
 
+  // 自動リスタート処理
+  useEffect(() => {
+    if (isGameOver) {
+      setCountdown(3);
+      const interval = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(interval);
+            restartGame();
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isGameOver]);
+
   return (
     <div className={styles.container}>
       <div className={styles.canvasWrapper}>
         <canvas ref={canvasRef} width={450} height={580} className={styles.canvas} />
         <BodyPix />
-        {/* <BodyPixTest className={styles.bodyPixOverlay} /> */}
       </div>
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          left: "20px",
-          backgroundColor: "rgba(255,255,255,0.8)",
-          padding: "8px 12px",
-          borderRadius: "8px",
-          fontWeight: "bold",
-        }}
-      >
-        {/* ブロック数: {blockCount} */}
-      </div>
-      {/* RESTARTダイアログ */}
       {isGameOver && (
-        <button onClick={restartGame} className={styles.restartButton}>
-          RESTART
-        </button>
+        <div className={styles.gameOverOverlay}>
+          <p className={styles.gameOverText}>GAME OVER</p>
+          {countdown !== null && (
+            <p className={styles.countdownText}>{countdown}</p>
+          )}
+        </div>
       )}
 
       {/* ホーム画面に戻るボタン */}
