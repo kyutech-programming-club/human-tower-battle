@@ -334,10 +334,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     }
     stageObjRef.current = stageFactory(world, ctx);
 
-    // スペースキーでブロック生成
+    // エンターキーでブロック生成
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if (e.code === "Space" && !isGameOver && !isSpawning) {
-        console.log("スペースキー押下 → 手動ブロック生成");
+      if (e.code === "Enter" && !isGameOver && !isSpawning) {
+        console.log("エンターキー押下 → 手動ブロック生成");
         spawnTargetImg();
       }
     };
@@ -553,7 +553,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         <canvas
           ref={canvasRef}
           width={450}
-          height={580}
+          height={634}
           className={styles.canvas}
         />
         <div className={styles.bodypixWrapper}>
