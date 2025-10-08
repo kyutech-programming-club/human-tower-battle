@@ -323,7 +323,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   return (
     <div className={styles.container}>
       <div className={styles.canvasWrapper}>
-        <canvas ref={canvasRef} width={450} height={580} className={styles.canvas} />
+        <canvas ref={canvasRef} width={450} height={650} className={styles.canvas} />
         <BodyPix />
         {/* <BodyPixTest className={styles.bodyPixOverlay} /> */}
       </div>
@@ -338,6 +338,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           fontWeight: "bold",
         }}
       >
+      <div className={styles.sky}>
+        <div className={`${styles.cloud} ${styles.cloud1}`}></div>
+        <div className={`${styles.cloud} ${styles.cloud2}`}></div>
+        <div className={`${styles.cloud} ${styles.cloud3}`}></div>
+      </div>
         {/* ブロック数: {blockCount} */}
       </div>
       {/* RESTARTダイアログ */}

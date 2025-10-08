@@ -6,3 +6,149 @@
   color: #333; /* 文字色 */
   border-bottom: 1px solid #ddd; /* 下線で区切る */
 }
+
+/* 全体のレイアウト */
+.container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: "Segoe UI", sans-serif;
+}
+
+/* === 背景全体 === */
+.background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* === 空 === */
+.sky {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 70%;
+  background: linear-gradient(to bottom, #87ceeb, #b0e0e6);
+  z-index: 1;
+}
+
+/* === 雲 === */
+.cloud {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0.9;
+  z-index: 2;
+  animation: float 40s linear infinite;
+}
+
+@keyframes float {
+  0% {
+    transform: translateX(-200px);
+  }
+  100% {
+    transform: translateX(120vw);
+  }
+}
+
+/* 雲それぞれの位置 */
+.cloud1 {
+  top: 50px;
+  left: 10%;
+  width: 100px;
+  height: 60px;
+  animation-delay: 0s;
+}
+
+.cloud2 {
+  top: 120px;
+  left: 60%;
+  width: 130px;
+  height: 75px;
+  animation-delay: 10s;
+}
+
+.cloud3 {
+  top: 200px;
+  left: 30%;
+  width: 90px;
+  height: 55px;
+  animation-delay: 20s;
+}
+
+/* === 山 === */
+.mountain {
+  position: absolute;
+  bottom: 25%;
+  left: 0;
+  width: 100%;
+  height: 25%;
+  background: linear-gradient(to top, #3b7a57, #5cb85c);
+  clip-path: polygon(0% 100%, 25% 40%, 50% 100%, 75% 45%, 100% 100%);
+  z-index: 3;
+}
+
+/* === 地面 === */
+.ground {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 25%;
+  background: #7cfc00;
+  border-top: 4px solid #4caf50;
+  z-index: 4;
+}
+
+/* === コンテンツ === */
+.content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.3);
+  padding: 30px 60px;
+  border-radius: 20px;
+  backdrop-filter: blur(5px);
+}
+
+.title {
+  color: #ff6600;
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+  text-shadow: 2px 2px 4px #fff;
+}
+
+/* === ナビゲーション === */
+.navList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.navItem {
+  margin: 10px 0;
+  font-size: 1.3rem;
+}
+
+.navItem a {
+  text-decoration: none;
+  color: #333;
+  background: #fff8dc;
+  padding: 10px 25px;
+  border-radius: 15px;
+  border: 2px solid #ffa500;
+  transition: 0.2s;
+}
+
+.navItem a:hover {
+  background: #ffeb99;
+  transform: scale(1.05);
+}

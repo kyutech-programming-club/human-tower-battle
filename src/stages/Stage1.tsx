@@ -5,7 +5,7 @@ export function createStage1(
   ctx: CanvasRenderingContext2D
 ) {
   // 床の定義
-  const groundWidth = 450;
+  const groundWidth = 300;
   const groundHeight = 20;
   const groundX = 225;
   const groundY = 530 - groundHeight / 2;
