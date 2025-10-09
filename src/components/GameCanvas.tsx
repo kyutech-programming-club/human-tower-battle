@@ -36,7 +36,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const stageObjRef = useRef<{ draw: () => void } | null>(null);
   const isGameOverRef = useRef<boolean>(false);
   const countdownRef = useRef<number | null>(null);
-  const blockCountRef = useRef<number>(0);
 
   const [isGameOver, setIsGameOver] = useState(false);
   const [blockCount, setBlockCount] = useState(0);
@@ -170,6 +169,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         setAutoModeState("generating");
         console.log("4. ブロック生成開始");
         await spawnTargetImg();
+        setBlockCount((prev) => prev + 1);
 
         setLastProcessedImageId(imageId);
         console.log("5. 完了");
@@ -352,7 +352,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
             label: "TargetImg",
             isStatic: false, // ← 落ちてくるので動的
             friction: 0.6,
-            frictionStatic: 0.7,
+            frictionStatic: 0.9,
             restitution: 0.02,
             density: 0.02,
           }
@@ -420,6 +420,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       if (e.code === "Enter" && !isGameOver && !isSpawning) {
         console.log("エンターキー押下 → 手動ブロック生成");
         spawnTargetImg();
+        setBlockCount((prev) => prev + 1);
       }
     };
 
@@ -435,12 +436,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // ブロックカウント表示
-      ctx.fillStyle = "black";
-      ctx.font = "20px sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText(`人数: ${blockCountRef.current}人`, 10, 30);
 
       // ステージ描画
       stageObjRef.current?.draw();
@@ -606,7 +601,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     countdownRef.current = null;
 
     setBlockCount(0);
-    blockCountRef.current = 0;
 
     // 新規追加: 最新IDをリセット
     setLastProcessedImageId(null);
@@ -646,8 +640,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       <div className={styles.canvasWrapper}>
         <canvas
           ref={canvasRef}
-          width={450}
-          height={634}
+          width={500}
+          height={780}
           className={styles.canvas}
         />
         <div className={styles.bodypixWrapper}>
@@ -669,66 +663,52 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         </div>
       )}
 
-      {/* 新規追加: 自動ブロック生成制御UI */}
+      {/* ブロック人数表示 */}
       <div
         style={{
           position: "absolute",
-          top: "10px",
-          right: "10px",
+          top: "20px",
+          left: "230px",
           zIndex: 10,
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-          backgroundColor: "rgba(255,255,255,0.9)",
-          padding: "8px",
+          padding: "4px 8px",
+          backgroundColor: "rgba(255,255,255,0.7)",
           borderRadius: "4px",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          fontSize: "32px",
+          fontWeight: "bold",
         }}
       >
+        人数: {blockCount}人
+      </div>
+
+      {/* 新規追加: 自動ブロック生成制御UI */}
+      <div className={styles.autoBlockGeneration}>
         <button
           onClick={() => setAutoBlockGeneration(!autoBlockGeneration)}
-          style={{
-            fontSize: "14px",
-            padding: "6px 12px",
-            backgroundColor: autoBlockGeneration ? "#4CAF50" : "#f44336",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
+          className={`${styles.autoBlockGenerationButton} ${
+            autoBlockGeneration
+              ? styles.autoBlockGenerationButtonOn
+              : styles.autoBlockGenerationButtonOff
+          }`}
         >
-          統一自動制御: {autoBlockGeneration ? "ON" : "OFF"}
+          自動ブロック生成: {autoBlockGeneration ? "ON" : "OFF"}
         </button>
 
         <button
           onClick={() => bodyPixRef.current?.saveToIndexedDB()}
           disabled={!bodyPixRef.current?.isReady()}
+          className={styles.manualSaveButton}
           style={{
-            fontSize: "14px",
-            padding: "6px 12px",
-            backgroundColor: "#2196F3",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            opacity: !bodyPixRef.current?.isReady() ? 0.5 : 1,
+            opacity: !bodyPixRef.current?.isReady() ? 0.5 : 1, // ←動的部分だけ残す
           }}
         >
           手動保存
         </button>
 
-        <div
-          style={{
-            fontSize: "12px",
-            color: "#666",
-            textAlign: "center",
-            lineHeight: "1.2",
-          }}
-        >
+        <div className={styles.autoBlockInfo}>
           {autoBlockGeneration ? (
             <>
               <div>状態: {autoModeState}</div>
-              <div style={{ fontSize: "10px", color: "#999" }}>
+              <div className={styles.autoBlockInfoSmall}>
                 次のブロック: {nextBlockCountdown}秒
               </div>
             </>
@@ -736,25 +716,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
             <div>手動保存モード</div>
           )}
 
-          <div style={{ fontSize: "10px", color: "#999", marginTop: "4px" }}>
+          <div className={styles.autoBlockInfoSmall}>
             カメラ: {bodyPixRef.current?.getStatus() || "初期化中..."}
           </div>
         </div>
       </div>
 
       {/* ホーム画面に戻るボタン */}
-      <button
-        onClick={() => navigate("/")}
-        style={{
-          position: "absolute",
-          top: "88%",
-          left: "80%",
-          transform: "translateX(-50%)",
-          fontSize: "20px",
-          padding: "8px 16px",
-          zIndex: 10,
-        }}
-      >
+      <button onClick={() => navigate("/")} className={styles.homeButton}>
         ホームに戻る
       </button>
     </div>

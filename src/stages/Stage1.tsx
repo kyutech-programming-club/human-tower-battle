@@ -5,10 +5,10 @@ export function createStage1(
   ctx: CanvasRenderingContext2D
 ) {
   // 床の定義
-  const groundWidth = 350;
+  const groundWidth = 400;
   const groundHeight = 20;
-  const groundX = 225;
-  const groundY = 590 - groundHeight / 2;
+  const groundX = 250;
+  const groundY = 740 - groundHeight / 2;
   const ground = Matter.Bodies.rectangle(
     groundX,
     groundY,
