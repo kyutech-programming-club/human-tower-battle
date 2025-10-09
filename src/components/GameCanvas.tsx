@@ -654,6 +654,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         </div>
       </div>
 
+       <div className={styles.sun}>
+          <div className={styles.sunCore}></div>
+        </div>
+
       {isGameOver && (
         <div className={styles.gameOverOverlay}>
           <p className={styles.gameOverText}>GAME OVER</p>

@@ -8,7 +8,7 @@ export function createStage1(
   const groundWidth = 400;
   const groundHeight = 20;
   const groundX = 250;
-  const groundY = 740 - groundHeight / 2;
+  const groundY = 700 - groundHeight / 2;
   const ground = Matter.Bodies.rectangle(
     groundX,
     groundY,
@@ -27,7 +27,7 @@ export function createStage1(
 
   // 描画関数を返す
   const draw = () => {
-    ctx.fillStyle = "brown";
+    ctx.fillStyle = "green";
     ctx.fillRect(
       ground.position.x - groundWidth / 2,
       ground.position.y - groundHeight / 2,

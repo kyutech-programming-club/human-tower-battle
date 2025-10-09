@@ -1,7 +1,6 @@
-import styles from "./Home.module.css"
+import styles from "./Home.module.css";
 import { Link } from "react-router-dom";
 import React from "react";
-
 
 const Home = () => {
   return (
@@ -14,6 +13,10 @@ const Home = () => {
         <div className={`${styles.cloud} ${styles.cloud3}`}></div>
         <div className={styles.mountain}></div>
         <div className={styles.ground}></div>
+
+        <div className={styles.sun}>
+          <div className={styles.sunCore}></div>
+        </div>
       </div>
 
       {/* 中央コンテンツ */}
