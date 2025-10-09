@@ -3,13 +3,13 @@ import * as tf from "@tensorflow/tfjs";
 import * as bodyPix from "@tensorflow-models/body-pix";
 import { saveCanvasToIndexedDB } from "../utils/db";
 
+// =======================================
 // 定数
+// =======================================
 const SEGMENTATION_CONFIG = {
-  FOREGROUND_COLOR: { r: 0, g: 0, b: 0, a: 0 }, // 人物部分を透明に（元映像を表示）
-  BACKGROUND_COLOR: { r: 240, g: 240, b: 240, a: 255 }, // 背景を透明に
   OPACITY: 1.0,
   BLUR_AMOUNT: 2.0,
-  FLIP_HORIZONTAL: true,
+  FLIP_HORIZONTAL: false,
 } as const;
 
 const CANVAS_STYLE = {
@@ -17,7 +17,133 @@ const CANVAS_STYLE = {
   height: 300,
 } as const;
 
+// =======================================
+// グリーン検出 & 共通処理（追加）
+// =======================================
+
+// RGB(0..255) → HSV(度/0..1/0..1)
+const rgbToHsv = (r: number, g: number, b: number) => {
+  const rf = r / 255, gf = g / 255, bf = b / 255;
+  const max = Math.max(rf, gf, bf), min = Math.min(rf, gf, bf);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    switch (max) {
+      case rf: h = ((gf - bf) / d) % 6; break;
+      case gf: h = (bf - rf) / d + 2; break;
+      case bf: h = (rf - gf) / d + 4; break;
+    }
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : d / max;
+  const v = max;
+  return { h, s, v };
+};
+
+// クロマキー（緑）とみなす範囲：現場に応じて調整可
+const GREEN_KEY = {
+  H_MIN: 70,   // 黄緑寄りなら 60 に下げる
+  H_MAX: 160,  // 青緑寄りなら 170 へ上げる
+  S_MIN: 0.25, // 彩度しきい
+  V_MIN: 0.20, // 明度しきい
+};
+
+const isGreenPixel = (r: number, g: number, b: number) => {
+  const { h, s, v } = rgbToHsv(r, g, b);
+  return (
+    h >= GREEN_KEY.H_MIN && h <= GREEN_KEY.H_MAX &&
+    s >= GREEN_KEY.S_MIN && v >= GREEN_KEY.V_MIN
+  );
+};
+
+// 人物マスク（0/1）から「緑っぽい部分」を除いた補正マスクを返す
+const refineMaskWithGreen = (
+  personMask: Uint8Array | Int32Array | number[],
+  imageData: ImageData
+) => {
+  const data = imageData.data; // RGBA
+  const n = personMask.length;
+  const refined = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (personMask[i] === 1) {
+      const idx = i * 4;
+      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+      refined[i] = isGreenPixel(r, g, b) ? 0 : 1;
+    } else {
+      refined[i] = 0;
+    }
+  }
+  return refined;
+};
+
+// BodyPixのデフォルト推論オプション
+const DEFAULT_SEGMENT_OPTS = {
+  flipHorizontal: SEGMENTATION_CONFIG.FLIP_HORIZONTAL,
+  internalResolution: "medium" as const,
+  segmentationThreshold: 0.7,
+};
+
+/**
+ * 共通処理：
+ * 1) segmentPerson
+ * 2) (必要なら反転して) video を canvas に描画
+ * 3) imageData を取得
+ * 4) 緑除去補正マスク生成
+ * 5) αを書き換え（人物=255, 背景=0）
+ * 6) putImageData
+ */
+const segmentDrawAndApplyAlpha = async (params: {
+  video: HTMLVideoElement;
+  canvas: HTMLCanvasElement;
+  model: bodyPix.BodyPix;
+  segmentOpts?: Partial<typeof DEFAULT_SEGMENT_OPTS>;
+}) => {
+  const { video, canvas, model, segmentOpts } = params;
+  const opts = { ...DEFAULT_SEGMENT_OPTS, ...(segmentOpts ?? {}) };
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2D context not available");
+
+  // キャンバスサイズ同期
+  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }
+
+  // 1) セグメンテーション
+  const segmentation = await model.segmentPerson(video, opts);
+
+  // 2) フレーム描画（必要なら左右反転）
+  ctx.save();
+  if (opts.flipHorizontal) {
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  // 3) ピクセル取得
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  // 4) 緑除去補正マスク
+  const refinedMask = refineMaskWithGreen(segmentation.data, imageData);
+
+  // 5) αを書き換え（人物=255 / 背景=0）
+  const data = imageData.data;
+  for (let i = 0; i < refinedMask.length; i++) {
+    data[i * 4 + 3] = refinedMask[i] ? 255 : 0;
+  }
+
+  // 6) 描画更新
+  ctx.putImageData(imageData, 0, 0);
+
+  return { refinedMask, imageData, ctx };
+};
+
+// =======================================
 // カスタムフック: BodyPixモデルの初期化
+// =======================================
 const useBodyPixModel = () => {
   const [model, setModel] = useState<bodyPix.BodyPix | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,13 +171,15 @@ const useBodyPixModel = () => {
   return { model, isLoading, error };
 };
 
+// =======================================
 // カスタムフック: カメラストリームの初期化
+// =======================================
 const useVideoStream = (videoRef: React.RefObject<HTMLVideoElement | null>) => {
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true; // コンポーネントがマウントされているかを追跡
+    let isMounted = true;
 
     const initializeVideo = async () => {
       try {
@@ -60,12 +188,12 @@ const useVideoStream = (videoRef: React.RefObject<HTMLVideoElement | null>) => {
           audio: false,
         });
 
-        if (!isMounted) return; // アンマウント後は処理しない
+        if (!isMounted) return;
 
         if (videoRef.current) {
           const video = videoRef.current;
 
-          // 既存のストリームがある場合は停止
+          // 既存ストリームがある場合は停止
           if (video.srcObject) {
             const existingStream = video.srcObject as MediaStream;
             existingStream.getTracks().forEach((track) => track.stop());
@@ -73,15 +201,11 @@ const useVideoStream = (videoRef: React.RefObject<HTMLVideoElement | null>) => {
 
           video.srcObject = stream;
 
-          // loadedmetadataイベントを待ってからplay()を実行
           const handleLoadedMetadata = async () => {
             if (!isMounted) return;
-
             try {
               await video.play();
-              if (isMounted) {
-                setIsVideoReady(true);
-              }
+              if (isMounted) setIsVideoReady(true);
             } catch (playError) {
               if (isMounted) {
                 setError(
@@ -94,10 +218,8 @@ const useVideoStream = (videoRef: React.RefObject<HTMLVideoElement | null>) => {
           };
 
           if (video.readyState >= 1) {
-            // メタデータが既に読み込まれている場合
             handleLoadedMetadata();
           } else {
-            // メタデータの読み込みを待つ
             video.addEventListener("loadedmetadata", handleLoadedMetadata, {
               once: true,
             });
@@ -114,7 +236,6 @@ const useVideoStream = (videoRef: React.RefObject<HTMLVideoElement | null>) => {
 
     initializeVideo();
 
-    // クリーンアップ
     return () => {
       isMounted = false;
       if (videoRef.current?.srcObject) {
@@ -128,6 +249,9 @@ const useVideoStream = (videoRef: React.RefObject<HTMLVideoElement | null>) => {
   return { isVideoReady, error };
 };
 
+// =======================================
+// コンポーネント本体
+// =======================================
 const BodyPix: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -141,50 +265,22 @@ const BodyPix: React.FC = () => {
   } = useBodyPixModel();
   const { isVideoReady, error: videoError } = useVideoStream(videoRef);
 
-  // セグメンテーション実行
+  // セグメンテーション（ライブ表示）
   const runSegmentation = useCallback(async () => {
     if (!model || !videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    if (!video.videoWidth || !video.videoHeight) return;
-
-    // キャンバスサイズを動画に合わせる
-    if (
-      canvas.width !== video.videoWidth ||
-      canvas.height !== video.videoHeight
-    ) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-    }
-
     try {
-      // セグメンテーション実行
-      const segmentation = await model.segmentPerson(video);
-
-      // マスク作成
-      const mask = bodyPix.toMask(
-        segmentation,
-        SEGMENTATION_CONFIG.FOREGROUND_COLOR,
-        SEGMENTATION_CONFIG.BACKGROUND_COLOR
-      );
-
-      // 結果を描画
-      bodyPix.drawMask(
-        canvas,
-        video,
-        mask,
-        SEGMENTATION_CONFIG.OPACITY,
-        SEGMENTATION_CONFIG.BLUR_AMOUNT,
-        SEGMENTATION_CONFIG.FLIP_HORIZONTAL
-      );
+      await segmentDrawAndApplyAlpha({
+        video: videoRef.current,
+        canvas: canvasRef.current,
+        model,
+        // segmentOpts: { segmentationThreshold: 0.75 }, // 必要なら上書き
+      });
     } catch (error) {
       console.error("セグメンテーション実行エラー:", error);
     }
   }, [model]);
 
-  // リアルタイムセグメンテーションのループ
+  // リアルタイムループ
   useEffect(() => {
     if (!model || !isVideoReady) return;
 
@@ -196,63 +292,31 @@ const BodyPix: React.FC = () => {
     loop();
 
     return () => {
-      if (rafIdRef.current) {
-        cancelAnimationFrame(rafIdRef.current);
-      }
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     };
   }, [model, isVideoReady, runSegmentation]);
 
   // IndexedDBに透過PNGを保存
   const handleSaveToIndexedDB = useCallback(async () => {
-    if (!canvasRef.current || !model || !videoRef.current) {
+    if (!model || !videoRef.current) {
       console.warn("保存に必要な要素が準備できていません。");
       return;
     }
 
     try {
       const video = videoRef.current;
-      const originalCanvas = canvasRef.current;
 
-      // 保存用の一時的なcanvasを作成
+      // 保存は一時キャンバスを使用（UIキャンバスには触れない）
       const tempCanvas = document.createElement("canvas");
-      const tempCtx = tempCanvas.getContext("2d");
-      if (!tempCtx) {
-        console.error("Canvas コンテキストの取得に失敗しました。");
-        return;
-      }
+      tempCanvas.width = video.videoWidth;
+      tempCanvas.height = video.videoHeight;
 
-      tempCanvas.width = originalCanvas.width;
-      tempCanvas.height = originalCanvas.height;
+      await segmentDrawAndApplyAlpha({
+        video,
+        canvas: tempCanvas,
+        model,
+      });
 
-      // セグメンテーション実行（保存用）
-      const segmentation = await model.segmentPerson(video);
-
-      // 元の映像を描画
-      tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-
-      // ImageDataを取得してピクセル操作
-      const imageData = tempCtx.getImageData(
-        0,
-        0,
-        tempCanvas.width,
-        tempCanvas.height
-      );
-      const data = imageData.data; // RGBA配列
-      const mask = segmentation.data; // セグメンテーション結果（0 or 1）
-
-      // 背景部分（mask[i] === 0）を透明にする
-      for (let i = 0; i < mask.length; i++) {
-        if (mask[i] === 0) {
-          // 背景ピクセルのアルファ値を0に設定（透明）
-          data[i * 4 + 3] = 0;
-        }
-        // 人物部分（mask[i] === 1）はそのまま（不透明）
-      }
-
-      // 加工したImageDataを戻す
-      tempCtx.putImageData(imageData, 0, 0);
-
-      // IndexedDBに保存
       const id = await saveCanvasToIndexedDB(tempCanvas);
       console.log(`画像がIndexedDBに保存されました！（ID: ${id}）`);
       return id;
@@ -264,15 +328,9 @@ const BodyPix: React.FC = () => {
 
   // ステータス表示
   const getStatusText = () => {
-    if (modelError || videoError) {
-      return `エラー: ${modelError || videoError}`;
-    }
-    if (isModelLoading) {
-      return "モデル読み込み中...";
-    }
-    if (!isVideoReady) {
-      return "カメラ初期化中...";
-    }
+    if (modelError || videoError) return `エラー: ${modelError || videoError}`;
+    if (isModelLoading) return "モデル読み込み中...";
+    if (!isVideoReady) return "カメラ初期化中...";
     return "準備完了";
   };
 
@@ -282,9 +340,7 @@ const BodyPix: React.FC = () => {
   useEffect(() => {
     if (!autoSave || !isReady) return;
 
-    console.log("BodyPix自動保存モード開始（5秒間隔）");
     const interval = setInterval(async () => {
-      console.log("BodyPix自動保存実行中...");
       try {
         await handleSaveToIndexedDB();
       } catch (error) {
@@ -292,10 +348,7 @@ const BodyPix: React.FC = () => {
       }
     }, 5000);
 
-    return () => {
-      console.log("BodyPix自動保存モード停止");
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [autoSave, isReady, handleSaveToIndexedDB]);
 
   return (
@@ -310,19 +363,14 @@ const BodyPix: React.FC = () => {
         />
 
         {/* セグメンテーション結果表示 */}
-        <div
-          style={{
-            ...CANVAS_STYLE,
-            display: "inline-block",
-          }}
-        >
+        <div style={{ ...CANVAS_STYLE, display: "inline-block" }}>
           <canvas ref={canvasRef} style={CANVAS_STYLE} />
         </div>
 
         <p>状態: {getStatusText()}</p>
       </div>
 
-      {/* UI部分を拡張 */}
+      {/* UI */}
       <div
         style={{
           display: "flex",
@@ -331,7 +379,6 @@ const BodyPix: React.FC = () => {
           flexDirection: "column",
         }}
       >
-        {/* 手動保存ボタン */}
         <button
           onClick={handleSaveToIndexedDB}
           disabled={!isReady}
@@ -347,7 +394,6 @@ const BodyPix: React.FC = () => {
           手動保存
         </button>
 
-        {/* 自動保存切り替え */}
         <label
           style={{
             display: "flex",
@@ -370,7 +416,6 @@ const BodyPix: React.FC = () => {
           </span>
         </label>
 
-        {/* 状態表示 */}
         <div
           style={{
             fontSize: "12px",
