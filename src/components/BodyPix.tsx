@@ -1,4 +1,11 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import {
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import * as tf from "@tensorflow/tfjs";
 import * as bodyPix from "@tensorflow-models/body-pix";
 import { saveCanvasToIndexedDB } from "../utils/db";
@@ -23,15 +30,24 @@ const CANVAS_STYLE = {
 
 // RGB(0..255) → HSV(度/0..1/0..1)
 const rgbToHsv = (r: number, g: number, b: number) => {
-  const rf = r / 255, gf = g / 255, bf = b / 255;
-  const max = Math.max(rf, gf, bf), min = Math.min(rf, gf, bf);
+  const rf = r / 255,
+    gf = g / 255,
+    bf = b / 255;
+  const max = Math.max(rf, gf, bf),
+    min = Math.min(rf, gf, bf);
   const d = max - min;
   let h = 0;
   if (d !== 0) {
     switch (max) {
-      case rf: h = ((gf - bf) / d) % 6; break;
-      case gf: h = (bf - rf) / d + 2; break;
-      case bf: h = (rf - gf) / d + 4; break;
+      case rf:
+        h = ((gf - bf) / d) % 6;
+        break;
+      case gf:
+        h = (bf - rf) / d + 2;
+        break;
+      case bf:
+        h = (rf - gf) / d + 4;
+        break;
     }
     h *= 60;
     if (h < 0) h += 360;
@@ -43,17 +59,19 @@ const rgbToHsv = (r: number, g: number, b: number) => {
 
 // クロマキー（緑）とみなす範囲：現場に応じて調整可
 const GREEN_KEY = {
-  H_MIN: 70,   // 黄緑寄りなら 60 に下げる
-  H_MAX: 160,  // 青緑寄りなら 170 へ上げる
+  H_MIN: 70, // 黄緑寄りなら 60 に下げる
+  H_MAX: 160, // 青緑寄りなら 170 へ上げる
   S_MIN: 0.25, // 彩度しきい
-  V_MIN: 0.20, // 明度しきい
+  V_MIN: 0.2, // 明度しきい
 };
 
 const isGreenPixel = (r: number, g: number, b: number) => {
   const { h, s, v } = rgbToHsv(r, g, b);
   return (
-    h >= GREEN_KEY.H_MIN && h <= GREEN_KEY.H_MAX &&
-    s >= GREEN_KEY.S_MIN && v >= GREEN_KEY.V_MIN
+    h >= GREEN_KEY.H_MIN &&
+    h <= GREEN_KEY.H_MAX &&
+    s >= GREEN_KEY.S_MIN &&
+    v >= GREEN_KEY.V_MIN
   );
 };
 
@@ -68,7 +86,9 @@ const refineMaskWithGreen = (
   for (let i = 0; i < n; i++) {
     if (personMask[i] === 1) {
       const idx = i * 4;
-      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+      const r = data[idx],
+        g = data[idx + 1],
+        b = data[idx + 2];
       refined[i] = isGreenPixel(r, g, b) ? 0 : 1;
     } else {
       refined[i] = 0;
@@ -106,7 +126,10 @@ const segmentDrawAndApplyAlpha = async (params: {
   if (!ctx) throw new Error("2D context not available");
 
   // キャンバスサイズ同期
-  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+  if (
+    canvas.width !== video.videoWidth ||
+    canvas.height !== video.videoHeight
+  ) {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
   }
@@ -252,107 +275,123 @@ const useVideoStream = (videoRef: React.RefObject<HTMLVideoElement | null>) => {
 // =======================================
 // コンポーネント本体
 // =======================================
-const BodyPix: React.FC = () => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafIdRef = useRef<number | undefined>(undefined);
-  const [autoSave, setAutoSave] = useState(false);
 
-  const {
-    model,
-    isLoading: isModelLoading,
-    error: modelError,
-  } = useBodyPixModel();
-  const { isVideoReady, error: videoError } = useVideoStream(videoRef);
+// 外部から呼び出し可能な関数の型定義
+export interface BodyPixRef {
+  saveToIndexedDB: () => Promise<number | undefined>;
+  isReady: () => boolean;
+  getStatus: () => string;
+}
 
-  // セグメンテーション（ライブ表示）
-  const runSegmentation = useCallback(async () => {
-    if (!model || !videoRef.current || !canvasRef.current) return;
-    try {
-      await segmentDrawAndApplyAlpha({
-        video: videoRef.current,
-        canvas: canvasRef.current,
-        model,
-        // segmentOpts: { segmentationThreshold: 0.75 }, // 必要なら上書き
-      });
-    } catch (error) {
-      console.error("セグメンテーション実行エラー:", error);
-    }
-  }, [model]);
+interface BodyPixProps {
+  onSaveComplete?: (imageId: number) => void;
+}
 
-  // リアルタイムループ
-  useEffect(() => {
-    if (!model || !isVideoReady) return;
+const BodyPix = forwardRef<BodyPixRef, BodyPixProps>(
+  ({ onSaveComplete }, ref) => {
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const rafIdRef = useRef<number | undefined>(undefined);
 
-    const loop = () => {
-      runSegmentation();
-      rafIdRef.current = requestAnimationFrame(loop);
-    };
+    const {
+      model,
+      isLoading: isModelLoading,
+      error: modelError,
+    } = useBodyPixModel();
+    const { isVideoReady, error: videoError } = useVideoStream(videoRef);
 
-    loop();
-
-    return () => {
-      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    };
-  }, [model, isVideoReady, runSegmentation]);
-
-  // IndexedDBに透過PNGを保存
-  const handleSaveToIndexedDB = useCallback(async () => {
-    if (!model || !videoRef.current) {
-      console.warn("保存に必要な要素が準備できていません。");
-      return;
-    }
-
-    try {
-      const video = videoRef.current;
-
-      // 保存は一時キャンバスを使用（UIキャンバスには触れない）
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = video.videoWidth;
-      tempCanvas.height = video.videoHeight;
-
-      await segmentDrawAndApplyAlpha({
-        video,
-        canvas: tempCanvas,
-        model,
-      });
-
-      const id = await saveCanvasToIndexedDB(tempCanvas);
-      console.log(`画像がIndexedDBに保存されました！（ID: ${id}）`);
-      return id;
-    } catch (error) {
-      console.error("IndexedDBへの保存エラー:", error);
-      throw error;
-    }
-  }, [model]);
-
-  // ステータス表示
-  const getStatusText = () => {
-    if (modelError || videoError) return `エラー: ${modelError || videoError}`;
-    if (isModelLoading) return "モデル読み込み中...";
-    if (!isVideoReady) return "カメラ初期化中...";
-    return "準備完了";
-  };
-
-  const isReady = model && isVideoReady && !modelError && !videoError;
-
-  // 5秒間隔で自動保存
-  useEffect(() => {
-    if (!autoSave || !isReady) return;
-
-    const interval = setInterval(async () => {
+    // セグメンテーション（ライブ表示）
+    const runSegmentation = useCallback(async () => {
+      if (!model || !videoRef.current || !canvasRef.current) return;
       try {
-        await handleSaveToIndexedDB();
+        await segmentDrawAndApplyAlpha({
+          video: videoRef.current,
+          canvas: canvasRef.current,
+          model,
+          // segmentOpts: { segmentationThreshold: 0.75 }, // 必要なら上書き
+        });
       } catch (error) {
-        console.error("BodyPix自動保存エラー:", error);
+        console.error("セグメンテーション実行エラー:", error);
       }
-    }, 5000);
+    }, [model]);
 
-    return () => clearInterval(interval);
-  }, [autoSave, isReady, handleSaveToIndexedDB]);
+    // リアルタイムループ
+    useEffect(() => {
+      if (!model || !isVideoReady) return;
 
-  return (
-    <>
+      const loop = () => {
+        runSegmentation();
+        rafIdRef.current = requestAnimationFrame(loop);
+      };
+
+      loop();
+
+      return () => {
+        if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      };
+    }, [model, isVideoReady, runSegmentation]);
+
+    // IndexedDBに透過PNGを保存
+    const handleSaveToIndexedDB = useCallback(async () => {
+      if (!model || !videoRef.current) {
+        console.warn("保存に必要な要素が準備できていません。");
+        return;
+      }
+
+      try {
+        const video = videoRef.current;
+
+        // 保存は一時キャンバスを使用（UIキャンバスには触れない）
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+
+        await segmentDrawAndApplyAlpha({
+          video,
+          canvas: tempCanvas,
+          model,
+        });
+
+        const id = await saveCanvasToIndexedDB(tempCanvas);
+        console.log(`画像がIndexedDBに保存されました！（ID: ${id}）`);
+
+        // 保存完了コールバック実行
+        if (onSaveComplete && id) {
+          onSaveComplete(id);
+        }
+
+        return id;
+      } catch (error) {
+        console.error("IndexedDBへの保存エラー:", error);
+        throw error;
+      }
+    }, [model, onSaveComplete]);
+
+    // 外部から呼び出し可能な関数を公開
+    useImperativeHandle(
+      ref,
+      () => ({
+        saveToIndexedDB: handleSaveToIndexedDB,
+        isReady: () => !!(model && isVideoReady && !modelError && !videoError),
+        getStatus: () => {
+          if (modelError || videoError)
+            return `エラー: ${modelError || videoError}`;
+          if (isModelLoading) return "モデル読み込み中...";
+          if (!isVideoReady) return "カメラ初期化中...";
+          return "準備完了";
+        },
+      }),
+      [
+        handleSaveToIndexedDB,
+        model,
+        isVideoReady,
+        modelError,
+        videoError,
+        isModelLoading,
+      ]
+    );
+
+    return (
       <div>
         {/* 非表示のビデオ要素（データソース） */}
         <video
@@ -366,69 +405,11 @@ const BodyPix: React.FC = () => {
         <div style={{ ...CANVAS_STYLE, display: "inline-block" }}>
           <canvas ref={canvasRef} style={CANVAS_STYLE} />
         </div>
-
-        <p>状態: {getStatusText()}</p>
       </div>
+    );
+  }
+);
 
-      {/* UI */}
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          marginTop: "8px",
-          flexDirection: "column",
-        }}
-      >
-        <button
-          onClick={handleSaveToIndexedDB}
-          disabled={!isReady}
-          style={{
-            padding: "8px 16px",
-            fontSize: "14px",
-            backgroundColor: "#2196F3",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-          }}
-        >
-          手動保存
-        </button>
-
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            fontSize: "14px",
-            cursor: isReady ? "pointer" : "not-allowed",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={autoSave}
-            onChange={(e) => setAutoSave(e.target.checked)}
-            disabled={!isReady}
-            style={{ cursor: isReady ? "pointer" : "not-allowed" }}
-          />
-          <span style={{ color: isReady ? "black" : "#999" }}>
-            自動保存（5秒間隔）
-            {autoSave && isReady ? " 🔄" : ""}
-          </span>
-        </label>
-
-        <div
-          style={{
-            fontSize: "12px",
-            textAlign: "center",
-            color: autoSave && isReady ? "green" : "#666",
-            fontWeight: autoSave && isReady ? "bold" : "normal",
-          }}
-        >
-          {autoSave && isReady ? "自動保存実行中" : "手動保存モード"}
-        </div>
-      </div>
-    </>
-  );
-};
+BodyPix.displayName = "BodyPix";
 
 export default BodyPix;
