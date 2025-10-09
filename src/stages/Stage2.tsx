@@ -17,7 +17,7 @@ export function createStage2(
     height: 20,
   };
   const ground2 = {
-    body: Matter.Bodies.rectangle(365, 430, 50, 20, {
+    body: Matter.Bodies.rectangle(365, 670, 50, 20, {
       isStatic: true,
       friction: 1.0, // 最大摩擦
       frictionStatic: 1.0, // 静止摩擦

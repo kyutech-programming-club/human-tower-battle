@@ -8,7 +8,7 @@ export function createStage3(
   const groundWidth = 100;
   const groundHeight = 20;
   const groundX = 225;
-  const groundY = 530 - groundHeight / 2;
+  const groundY = 740 - groundHeight / 2;
   const ground = Matter.Bodies.rectangle(
     groundX,
     groundY,
