@@ -39,8 +39,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const [blockCount, setBlockCount] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [position, setPosition] = useState(400);
-  const scale = 0.3;
-  const [edgePoints, setEdgePoints] = useState<{ x: number; y: number }[]>([]);
+  // const scale = 0.3;
+  // const [edgePoints, setEdgePoints] = useState<{ x: number; y: number }[]>([]);
   const [isSpawning, setIsSpawning] = useState(false); // スペースキー処理中フラグ
   // IDベースの画像管理
   const [imageMap, setImageMap] = useState<Map<number, HTMLImageElement>>(
@@ -54,6 +54,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const [lastProcessedImageId, setLastProcessedImageId] = useState<
     number | null
   >(null);
+
+  const engine = engineRef.current;
+  const world = engine.world;
 
   // 最新画像をプリロードするuseEffect
   useEffect(() => {
@@ -246,73 +249,85 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         return;
       }
 
-      const test = await recognizeBorder(imageToUse);
-      setEdgePoints(test);
-      console.log("recognizeBorder完了:", test.length, "points");
+        const { points, rect, size, centroid } = await recognizeBorder(imageToUse);
+        // setEdgePoints(points);
+        console.log("recognizeBorder完了:", points.length, "points");
 
-      // CCW補正して [number, number][] に
-      const vertices: [number, number][] = ensureCCW(
-        test.map((p) => [p.x * scale, p.y * scale] as [number, number])
-      );
-      console.log("vertices生成完了:", vertices.length, "vertices");
+        // 表示倍率（画面でどのサイズで見せるか）
+        const desiredDisplayedWidth  = 200;                        // ←お好みで
+        const desiredDisplayedHeight = (desiredDisplayedWidth * size.h) / size.w; // アスペクト維持
+        const sx = desiredDisplayedWidth  / size.w;                // 画像px → 画面px の倍率
+        const sy = desiredDisplayedHeight / size.h;
 
-      // 凸分割
-      const convexPolygons: [number, number][][] = decomp.quickDecomp(vertices);
-      console.log("凸分割完了:", convexPolygons.length, "polygons");
+        // CCW補正 → ワールド座標へ（= 表示倍率でスケール）
+        const vertices: [number, number][] = ensureCCW(
+          points.map((p) => [p.x * sx, p.y * sy] as [number, number])
+        );
+        console.log("vertices生成完了:", vertices.length, "vertices");
 
-      // Matter.js の Vector[][] に変換
-      const matterPolygons: Matter.Vector[][] = convexPolygons.map((polygon) =>
-        polygon.map(([x, y]) => ({ x, y }))
-      );
+        // 凸分割
+        const convexPolygons: [number, number][][] = decomp.quickDecomp(vertices);
+        console.log("凸分割完了:", convexPolygons.length, "polygons");
 
-      // 各凸ポリゴンから Body を作成
-      const parts = matterPolygons.map((polygon, index) => {
-        const centroid = getCentroid(polygon);
-        const shiftedPolygon = polygon.map((v) => ({
-          x: v.x - centroid.x,
-          y: v.y - centroid.y,
-        }));
-
-        const body = Matter.Bodies.fromVertices(
-          centroid.x, // 各パートの重心位置
-          centroid.y,
-          [shiftedPolygon],
-          {
-            isStatic: false,
-            friction: 0.1,
-            restitution: 0.3,
-          }
+        // Matter.Vector[][] に変換
+        const matterPolygons: Matter.Vector[][] = convexPolygons.map(
+          (polygon) => polygon.map(([x, y]) => ({ x, y }))
         );
 
-        console.log(`Part ${index} 生成完了:`, centroid);
-        return body;
-      });
+        // 各パートを重心原点にシフトして作成
+        const parts = matterPolygons.map((polygon, index) => {
+          const centroid = getCentroid(polygon);
+          const shifted = polygon.map((v) => ({ x: v.x - centroid.x, y: v.y - centroid.y }));
+          const body = Matter.Bodies.fromVertices(
+            centroid.x,
+            centroid.y,
+            [shifted],
+            {
+              label: "TargetImg",
+              isStatic: false,          // ← 落ちてくるので動的
+              friction: 0.6,
+              frictionStatic: 0.7,
+              restitution: 0.02,
+              density: 0.02,
+            }
+          );
+          console.log(`Part ${index} 生成完了:`, centroid);
+          return body;
+        });
 
-      // すべてのpartsを1つのcompound bodyに統合
-      const compoundBody = Matter.Body.create({
-        parts: parts,
-        label: "TargetImg",
-      });
+        // compound body
+        const compoundBody = Matter.Body.create({ parts, label: "TargetImg" });
+        (compoundBody as any).imageId = imageId;
+        // スプライト基準（0〜1）: 輪郭重心を基準点にする
+        const xOffset = centroid.x / size.w;
+        const yOffset = centroid.y / size.h;
 
-      // BodyにカスタムプロパティとしてimageIdを追加
-      (compoundBody as any).imageId = imageId;
+        (compoundBody as any).render = (compoundBody as any).render || {};
+        (compoundBody as any).render.sprite = {
+          texture: imageToUse,
+          xScale: sx,
+          yScale: sy,
+          xOffset,
+          yOffset,
+        };
 
-      // 統合されたbodyの位置を設定
-      Matter.Body.setPosition(compoundBody, { x: 225, y: 50 });
+        // 生成（スポーン）位置を“中心”で決める（AABB左上合わせは不要）
+        const spawnX = 200;
+        const spawnY = 80; // 画面上部から落とす
+        Matter.Body.setPosition(compoundBody, { x: spawnX, y: spawnY });
 
-      // 1つのcompound bodyをworldに追加
-      console.log("1つのcompound bodyをWorldに追加");
-      Matter.World.add(engineRef.current.world, compoundBody);
-      console.log("オブジェクト生成完了！");
+        // ちょっと回転させて落としたい場合
+        // Matter.Body.setAngle(compoundBody, 0.1);
 
-      engineRef.current.positionIterations = 10;
-      engineRef.current.velocityIterations = 10;
+        // 物理世界へ追加
+        Matter.World.add(world, compoundBody);
+        console.log("sprite方式でWorldに追加 / オブジェクト生成完了！");
     } catch (error) {
       console.error("オブジェクト生成に失敗しました:", error);
     } finally {
       setIsSpawning(false); // 処理完了フラグをリセット
     }
-  }, [isSpawning, currentImageUrl, currentImageId, scale, edgePoints]);
+  }, [isSpawning, currentImageUrl, currentImageId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -396,22 +411,30 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
         if (!image) continue;
 
-        // 親Bodyの位置と角度に合わせて描画
+        // 親Bodyの位置と角度に合わせて描画（ボディごとのスプライト情報を使用）
+        const sprite = (body as any).render?.sprite;
+        if (!sprite) {
+          // スプライト情報が無ければスキップ
+          continue;
+        }
+
         ctx.save();
         ctx.translate(body.position.x, body.position.y);
         ctx.rotate(body.angle);
 
-        // Body全体の中心に画像を合わせる
-        const centroid = getAveragePoint(edgePoints);
+        const imgW = image.width;
+        const imgH = image.height;
+        // スプライトのオフセットは画像サイズに対する割合なので、ピクセルに変換
+        const dx = imgW * sprite.xOffset * sprite.xScale;
+        const dy = imgH * sprite.yOffset * sprite.yScale;
 
         ctx.drawImage(
           image,
-          -centroid.x * scale,
-          -centroid.y * scale,
-          image.width * scale,
-          image.height * scale
+          -dx,
+          -dy,
+          imgW * sprite.xScale,
+          imgH * sprite.yScale
         );
-
         ctx.restore();
 
         // 当たり判定（子パーツ）はそのまま描画
@@ -472,7 +495,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       window.removeEventListener("keydown", handleKeyDown);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [position, edgePoints, stage, spawnTargetImg]);
+  }, [position, stage, spawnTargetImg]);
 
   // restartGame をコンポーネント内で定義（useEffect の外側で参照可能に）
   const restartGame = () => {
@@ -665,23 +688,7 @@ export const getVerticesFromSvg = async (path: string) => {
   return vertices;
 };
 
-const getAveragePoint = (points: { x: number; y: number }[]) => {
-  if (points.length === 0) return { x: 0, y: 0 };
-
-  const sum = points.reduce(
-    (acc, p) => {
-      acc.x += p.x;
-      acc.y += p.y;
-      return acc;
-    },
-    { x: 0, y: 0 }
-  );
-
-  return {
-    x: sum.x / points.length,
-    y: sum.y / points.length,
-  };
-};
+// getAveragePoint removed: no longer used
 
 function ensureCCW(vertices: [number, number][]): [number, number][] {
   let sum = 0;
