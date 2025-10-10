@@ -46,22 +46,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const [isSpawning, setIsSpawning] = useState(false); // スペースキー処理中フラグ
 
   // スコアを保存する関数
-const saveScore = (blockCount: number) => {
-  // これまでのスコアを取得（ない場合は []）
-  const existing = JSON.parse(localStorage.getItem("scoreHistory") || "[]");
+  const saveScore = (blockCount: number) => {
+    // これまでのスコアを取得（ない場合は []）
+    const existing = JSON.parse(localStorage.getItem("scoreHistory") || "[]");
 
-  // 新しいスコアを追加
-  const updated = [...existing, blockCount];
+    // 新しいスコアを追加
+    const updated = [...existing, blockCount];
 
-  // スコアを降順（高い順）に並び替え
-  updated.sort((a, b) => b - a);
+    // スコアを降順（高い順）に並び替え
+    updated.sort((a, b) => b - a);
 
-  // 上位5件だけ保存
-  const top5 = updated.slice(0, 5);
+    // 上位5件だけ保存
+    const top5 = updated.slice(0, 5);
 
-  // localStorage に保存
-  localStorage.setItem("scoreHistory", JSON.stringify(top5));
-};
+    // localStorage に保存
+    localStorage.setItem("scoreHistory", JSON.stringify(top5));
+  };
 
   // IDベースの画像管理
   const [imageMap, setImageMap] = useState<Map<number, HTMLImageElement>>(
@@ -83,7 +83,6 @@ const saveScore = (blockCount: number) => {
 
   // ブロックサイズ制御
   const [blockSize, setBlockSize] = useState<number>(400);
-
 
   // 最新画像をプリロードするuseEffect
   useEffect(() => {
@@ -659,38 +658,41 @@ const saveScore = (blockCount: number) => {
     }
   }, [isGameOver]);
 
-  
-useEffect(() => {
-  if (isGameOver) {
-    saveScore(blockCount);
-  }
-}, [isGameOver]);
+  useEffect(() => {
+    if (isGameOver) {
+      saveScore(blockCount);
+    }
+  }, [isGameOver]);
 
   return (
     <div className={styles.container}>
-      <div className={styles.canvasWrapper}>
-        <canvas
-          ref={canvasRef}
-          width={500}
-          height={780}
-          className={styles.canvas}
-        />
-        <div className={styles.bodypixWrapper}>
-          <BodyPix ref={bodyPixRef} />
-        </div>
-        <div className={styles.sky}>
-          <div className={`${styles.cloud} ${styles.cloud1}`}></div>
-          <div className={`${styles.cloud} ${styles.cloud2}`}></div>
-          <div className={`${styles.cloud} ${styles.cloud3}`}></div>
-        </div>
-      
-       <div className={styles.sun}>
-          <div className={styles.sunCore}></div>
+      <div className={styles.row}>
+        {/* ブロック人数表示 */}
+        <div className={styles.peopleCount}>人数: {blockCount}人</div>
+
+        {/* キャンバス */}
+        <div className={styles.canvasWrapper}>
+          <canvas
+            ref={canvasRef}
+            width={500}
+            height={780}
+            className={styles.canvas}
+          />
+          <div className={styles.bodypixWrapper}>
+            <BodyPix ref={bodyPixRef} />
+          </div>
         </div>
 
-    </div>
+        {/* カウントダウン */}
+        <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
+      </div>
 
-       
+      <div className={styles.sky}>
+        <div className={styles.cloud}></div>
+        <div className={styles.cloud}></div>
+        <div className={styles.cloud}></div>
+        <div className={styles.sun}></div>
+      </div>
 
       {isGameOver && (
         <div className={styles.gameOverOverlay}>
@@ -701,12 +703,6 @@ useEffect(() => {
           )}
         </div>
       )}
-
-      {/* ブロック人数表示 */}
-      <>
-        <div className={styles.peopleCount}>人数: {blockCount}人</div>
-        <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
-      </>
 
       {/* 自動ブロック生成制御UI */}
       <div className={styles.autoBlockGeneration}>
@@ -720,7 +716,6 @@ useEffect(() => {
         >
           自動ブロック生成: {autoBlockGeneration ? "ON" : "OFF"}
         </button>
-
         <button
           onClick={() => bodyPixRef.current?.saveToIndexedDB()}
           disabled={!bodyPixRef.current?.isReady()}
@@ -731,14 +726,12 @@ useEffect(() => {
         >
           手動保存
         </button>
-
-        {/* ブロックサイズコントローラー */}
+        ブロックサイズコントローラー
         <BlockSizeController
           currentSize={blockSize}
           onSizeChange={setBlockSize}
           disabled={autoBlockGeneration}
         />
-
         <div className={styles.autoBlockInfo}>
           {autoBlockGeneration ? (
             <>
@@ -755,11 +748,9 @@ useEffect(() => {
       </div>
 
       {/* ホーム画面に戻るボタン */}
-      <div>
-        <button onClick={() => navigate("/")} className={styles.homeButton}>
-          ホームに戻る
-        </button>
-      </div>
+      <button onClick={() => navigate("/")} className={styles.homeButton}>
+        ホームに戻る
+      </button>
     </div>
   );
 };
