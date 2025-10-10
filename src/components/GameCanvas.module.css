@@ -68,16 +68,34 @@
   font-weight: bold;
 }
 
-.blockCount {
+.peopleCount {
   position: absolute;
-  top: 30px;
-  left: 230px;
+  top: 40px;
+  left: 220px;
   z-index: 10;
   padding: 4px 8px;
   background-color: rgba(255, 255, 255, 0.7);
   border-radius: 4px;
   font-size: 32px;
   font-weight: bold;
+}
+.countdownCircle {
+  position: absolute;
+  top: 40px;
+  left: 900px;
+  z-index: 10;
+  width: 90px;
+  height: 90px;
+  background-color: #ffeb3b;
+  color: #000;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: bold;
+  border: 4px solid rgba(0, 0, 0, 0.15); /* 輪郭を軽く追加 */
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
 }
 
 .autoBlockGeneration {
@@ -132,12 +150,6 @@
   color: #666;
   text-align: center;
   line-height: 1.2;
-}
-
-.autoBlockInfoSmall {
-  font-size: 10px;
-  color: #999;
-  margin-top: 4px;
 }
 
 .homeButton {

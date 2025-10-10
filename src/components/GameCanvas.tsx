@@ -668,21 +668,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       )}
 
       {/* ブロック人数表示 */}
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          left: "230px",
-          zIndex: 10,
-          padding: "4px 8px",
-          backgroundColor: "rgba(255,255,255,0.7)",
-          borderRadius: "4px",
-          fontSize: "32px",
-          fontWeight: "bold",
-        }}
-      >
-        人数: {blockCount}人
-      </div>
+      <>
+        <div className={styles.peopleCount}>人数: {blockCount}人</div>
+        <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
+      </>
 
       {/* 自動ブロック生成制御UI */}
       <div className={styles.autoBlockGeneration}>
@@ -719,9 +708,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           {autoBlockGeneration ? (
             <>
               <div>状態: {autoModeState}</div>
-              <div className={styles.autoBlockInfoSmall}>
-                次のブロック: {nextBlockCountdown}秒
-              </div>
             </>
           ) : (
             <div>手動保存モード</div>
