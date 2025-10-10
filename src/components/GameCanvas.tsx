@@ -52,7 +52,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null); // Object URLを保存
 
   // 自動ブロック生成制御
-  const [autoBlockGeneration, setAutoBlockGeneration] = useState(false);
+  const [autoBlockGeneration, setAutoBlockGeneration] = useState(true);
   const [lastProcessedImageId, setLastProcessedImageId] = useState<
     number | null
   >(null);
@@ -63,7 +63,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const [nextBlockCountdown, setNextBlockCountdown] = useState<number>(0);
 
   // ブロックサイズ制御
-  const [blockSize, setBlockSize] = useState<number>(200);
+  const [blockSize, setBlockSize] = useState<number>(400);
 
   // 最新画像をプリロードするuseEffect
   useEffect(() => {
@@ -349,7 +349,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           y: v.y - centroid.y,
         }));
         const body = Matter.Bodies.fromVertices(
-          centroid.x,
+          centroid.x + 55,
           centroid.y,
           [shifted],
           {
@@ -384,7 +384,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       // 生成（スポーン）位置を“中心”で決める（AABB左上合わせは不要）
       const spawnX = 200;
       const spawnY = 80; // 画面上部から落とす
-      Matter.Body.setPosition(compoundBody, { x: spawnX, y: spawnY });
+      // Matter.Body.setPosition(compoundBody, { x: spawnX, y: spawnY });
 
       // ちょっと回転させて落としたい場合
       // Matter.Body.setAngle(compoundBody, 0.1);
@@ -720,9 +720,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       </div>
 
       {/* ホーム画面に戻るボタン */}
-      <button onClick={() => navigate("/")} className={styles.homeButton}>
-        ホームに戻る
-      </button>
+      <div>
+        <button onClick={() => navigate("/")} className={styles.homeButton}>
+          ホームに戻る
+        </button>
+      </div>
     </div>
   );
 };
