@@ -171,3 +171,47 @@
   border-radius: 50%;
   box-shadow: 0 0 8px rgba(255, 200, 0, 0.6);
 }
+
+.scoreSection {
+  position: absolute;
+  top: 250px;
+  left: 70px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 10px 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.howToPlay{
+  position: absolute;
+  top: 250px;
+  left:870px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 10px 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.scoreSection h2 {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+.scoreSection ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.scoreSection li {
+  font-size: 1rem;
+  margin: 4px 0;
+}
+
+.howToPlay ul {
+  list-style: none;
+  padding: 0;
+}
+
+.howToPlay li {
+  margin-bottom: 0.5rem;
+}
