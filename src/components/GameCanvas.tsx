@@ -71,7 +71,7 @@ const saveScore = (blockCount: number) => {
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null); // Object URLを保存
 
   // 自動ブロック生成制御
-  const [autoBlockGeneration, setAutoBlockGeneration] = useState(false);
+  const [autoBlockGeneration, setAutoBlockGeneration] = useState(true);
   const [lastProcessedImageId, setLastProcessedImageId] = useState<
     number | null
   >(null);
@@ -82,7 +82,7 @@ const saveScore = (blockCount: number) => {
   const [nextBlockCountdown, setNextBlockCountdown] = useState<number>(0);
 
   // ブロックサイズ制御
-  const [blockSize, setBlockSize] = useState<number>(200);
+  const [blockSize, setBlockSize] = useState<number>(400);
 
 
   // 最新画像をプリロードするuseEffect
@@ -369,7 +369,7 @@ const saveScore = (blockCount: number) => {
           y: v.y - centroid.y,
         }));
         const body = Matter.Bodies.fromVertices(
-          centroid.x,
+          centroid.x + 55,
           centroid.y,
           [shifted],
           {
@@ -404,7 +404,7 @@ const saveScore = (blockCount: number) => {
       // 生成（スポーン）位置を“中心”で決める（AABB左上合わせは不要）
       const spawnX = 200;
       const spawnY = 80; // 画面上部から落とす
-      Matter.Body.setPosition(compoundBody, { x: spawnX, y: spawnY });
+      // Matter.Body.setPosition(compoundBody, { x: spawnX, y: spawnY });
 
       // ちょっと回転させて落としたい場合
       // Matter.Body.setAngle(compoundBody, 0.1);
@@ -703,21 +703,10 @@ useEffect(() => {
       )}
 
       {/* ブロック人数表示 */}
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          left: "200px",
-          zIndex: 10,
-          padding: "4px 8px",
-          backgroundColor: "rgba(255,255,255,0.7)",
-          borderRadius: "4px",
-          fontSize: "32px",
-          fontWeight: "bold",
-        }}
-      >
-        スコア: {blockCount}人
-      </div>
+      <>
+        <div className={styles.peopleCount}>人数: {blockCount}人</div>
+        <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
+      </>
 
       {/* 自動ブロック生成制御UI */}
       <div className={styles.autoBlockGeneration}>
@@ -754,9 +743,6 @@ useEffect(() => {
           {autoBlockGeneration ? (
             <>
               <div>状態: {autoModeState}</div>
-              <div className={styles.autoBlockInfoSmall}>
-                次のブロック: {nextBlockCountdown}秒
-              </div>
             </>
           ) : (
             <div>手動保存モード</div>
@@ -769,9 +755,11 @@ useEffect(() => {
       </div>
 
       {/* ホーム画面に戻るボタン */}
-      <button onClick={() => navigate("/")} className={styles.homeButton}>
-        ホームに戻る
-      </button>
+      <div>
+        <button onClick={() => navigate("/")} className={styles.homeButton}>
+          ホームに戻る
+        </button>
+      </div>
     </div>
   );
 };
