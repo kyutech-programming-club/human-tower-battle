@@ -10,6 +10,7 @@ import { recognizeBorder } from "./RecognizeBorder.tsx";
 import decomp from "poly-decomp";
 import { createStage3 } from "../stages/Stage3.tsx";
 import BlockSizeController from "./BlockSizeController.tsx";
+import Background from "./background/index.tsx";
 import {
   getLatestImageIdFromIndexedDB,
   getImageFromIndexedDB,
@@ -666,6 +667,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
   return (
     <div className={styles.container}>
+      {/* 背景 */}
+      <Background />
+
       <div className={styles.row}>
         {/* ブロック人数表示 */}
         <div className={styles.peopleCount}>人数: {blockCount}人</div>
@@ -685,13 +689,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
         {/* カウントダウン */}
         <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
-      </div>
-
-      <div className={styles.sky}>
-        <div className={styles.cloud}></div>
-        <div className={styles.cloud}></div>
-        <div className={styles.cloud}></div>
-        <div className={styles.sun}></div>
       </div>
 
       {isGameOver && (
