@@ -1,5 +1,5 @@
 import React from "react";
-import styles from "../styles/background.module.css";
+import styles from "./index.module.css";
 
 interface BackgroundProps {
   children?: React.ReactNode;
