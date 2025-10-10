@@ -44,6 +44,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const [position, setPosition] = useState(400);
 
   const [isSpawning, setIsSpawning] = useState(false); // スペースキー処理中フラグ
+
+  // スコアを保存する関数
+const saveScore = (blockCount: number) => {
+  // これまでのスコアを取得（ない場合は []）
+  const existing = JSON.parse(localStorage.getItem("scoreHistory") || "[]");
+
+  // 新しいスコアを追加
+  const updated = [...existing, blockCount];
+
+  // スコアを降順（高い順）に並び替え
+  updated.sort((a, b) => b - a);
+
+  // 上位5件だけ保存
+  const top5 = updated.slice(0, 5);
+
+  // localStorage に保存
+  localStorage.setItem("scoreHistory", JSON.stringify(top5));
+};
+
   // IDベースの画像管理
   const [imageMap, setImageMap] = useState<Map<number, HTMLImageElement>>(
     new Map()
@@ -64,6 +83,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
   // ブロックサイズ制御
   const [blockSize, setBlockSize] = useState<number>(400);
+
 
   // 最新画像をプリロードするuseEffect
   useEffect(() => {
@@ -639,6 +659,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     }
   }, [isGameOver]);
 
+  
+useEffect(() => {
+  if (isGameOver) {
+    saveScore(blockCount);
+  }
+}, [isGameOver]);
+
   return (
     <div className={styles.container}>
       <div className={styles.canvasWrapper}>
@@ -656,11 +683,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           <div className={`${styles.cloud} ${styles.cloud2}`}></div>
           <div className={`${styles.cloud} ${styles.cloud3}`}></div>
         </div>
-      </div>
+      
+       <div className={styles.sun}>
+          <div className={styles.sunCore}></div>
+        </div>
+
+    </div>
+
+       
 
       {isGameOver && (
         <div className={styles.gameOverOverlay}>
           <p className={styles.gameOverText}>GAME OVER</p>
+          <p className={styles.gameOverScore}>あなたのスコア：{blockCount}人</p>
           {countdown !== null && (
             <p className={styles.countdownText}>{countdown}</p>
           )}

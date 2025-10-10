@@ -44,7 +44,7 @@ export function createStage2(
 
   // 描画関数
   const draw = () => {
-    ctx.fillStyle = "brown";
+    ctx.fillStyle = "green";
 
     const grounds = [ground1, ground2, ground3];
 

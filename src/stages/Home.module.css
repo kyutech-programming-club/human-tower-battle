@@ -1,13 +1,13 @@
-/* li のデザイン */
+
 .scoreItem {
   list-style: none;
   padding: 0.3rem 0;
   font-size: 1.1rem;
-  color: #333; /* 文字色 */
-  border-bottom: 1px solid #ddd; /* 下線で区切る */
+  color: #333; 
+  border-bottom: 1px solid #ddd; 
 }
 
-/* 全体のレイアウト */
+
 .container {
   position: relative;
   width: 100vw;
@@ -16,7 +16,6 @@
   font-family: "Segoe UI", sans-serif;
 }
 
-/* === 背景全体 === */
 .background {
   position: absolute;
   top: 0;
@@ -26,7 +25,6 @@
   z-index: 0;
 }
 
-/* === 空 === */
 .sky {
   position: absolute;
   top: 0;
@@ -37,7 +35,7 @@
   z-index: 1;
 }
 
-/* === 雲 === */
+
 .cloud {
   position: absolute;
   background: #fff;
@@ -56,7 +54,7 @@
   }
 }
 
-/* 雲それぞれの位置 */
+
 .cloud1 {
   top: 50px;
   left: 10%;
@@ -81,7 +79,7 @@
   animation-delay: 20s;
 }
 
-/* === 山 === */
+
 .mountain {
   position: absolute;
   bottom: 25%;
@@ -93,7 +91,7 @@
   z-index: 3;
 }
 
-/* === 地面 === */
+
 .ground {
   position: absolute;
   bottom: 0;
@@ -105,7 +103,6 @@
   z-index: 4;
 }
 
-/* === コンテンツ === */
 .content {
   position: absolute;
   top: 50%;
@@ -126,7 +123,7 @@
   text-shadow: 2px 2px 4px #fff;
 }
 
-/* === ナビゲーション === */
+
 .navList {
   list-style: none;
   padding: 0;
@@ -151,4 +148,70 @@
 .navItem a:hover {
   background: #ffeb99;
   transform: scale(1.05);
+}
+
+
+.sun {
+  position: absolute;
+  top: 40px;
+  right: 60px;
+  width: 130px;
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+
+.sunCore {
+  width: 80px;
+  height: 80px;
+  background: #ffeb3b;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 200, 0, 0.6);
+}
+
+.scoreSection {
+  position: absolute;
+  top: 250px;
+  left: 70px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 10px 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.howToPlay{
+  position: absolute;
+  top: 250px;
+  left:870px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 10px 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.scoreSection h2 {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+.scoreSection ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.scoreSection li {
+  font-size: 1rem;
+  margin: 4px 0;
+}
+
+.howToPlay ul {
+  list-style: none;
+  padding: 0;
+}
+
+.howToPlay li {
+  margin-bottom: 0.5rem;
 }

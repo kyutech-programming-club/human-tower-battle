@@ -27,7 +27,7 @@ export function createStage3(
 
   // 描画関数を返す
   const draw = () => {
-    ctx.fillStyle = "brown";
+    ctx.fillStyle = "green";
     ctx.fillRect(
       ground.position.x - groundWidth / 2,
       ground.position.y - groundHeight / 2,
