@@ -1,0 +1,69 @@
+.sky {
+  background: linear-gradient(to bottom, #87ceeb, #b0e0e6);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: -9999;
+}
+
+.cloud {
+  position: absolute;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0.9;
+  animation: float 30s linear infinite;
+  z-index: 10;
+}
+
+.cloud:nth-child(1) {
+  width: 100px;
+  height: 60px;
+  top: 40px;
+  left: 10%;
+}
+.cloud:nth-child(1)::before {
+  width: 60px;
+  height: 60px;
+  left: -30px;
+  top: 10px;
+}
+.cloud:nth-child(1)::after {
+  width: 80px;
+  height: 50px;
+  left: 60px;
+  top: 20px;
+}
+
+.cloud:nth-child(2) {
+  width: 120px;
+  height: 70px;
+  top: 100px;
+  left: 60%;
+}
+.cloud:nth-child(3) {
+  width: 90px;
+  height: 55px;
+  top: 180px;
+  left: 30%;
+}
+
+@keyframes float {
+  0% {
+    transform: translateX(-200px);
+  }
+  100% {
+    transform: translateX(120vw);
+  }
+}
+
+.sun {
+  position: absolute;
+  top: 40px;
+  right: 60px;
+  width: 80px;
+  height: 80px;
+  background: #ffeb3b;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 200, 0, 0.6);
+  z-index: 5;
+}
