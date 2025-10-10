@@ -9,6 +9,7 @@ import { createStage2 } from "../stages/Stage2.tsx";
 import { recognizeBorder } from "./RecognizeBorder.tsx";
 import decomp from "poly-decomp";
 import { createStage3 } from "../stages/Stage3.tsx";
+import BlockSizeController from "./BlockSizeController.tsx";
 import {
   getLatestImageIdFromIndexedDB,
   getImageFromIndexedDB,
@@ -60,6 +61,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   type AutoModeState = "idle" | "capturing" | "saving" | "generating" | "error";
   const [autoModeState, setAutoModeState] = useState<AutoModeState>("idle");
   const [nextBlockCountdown, setNextBlockCountdown] = useState<number>(0);
+
+  // ブロックサイズ制御
+  const [blockSize, setBlockSize] = useState<number>(200);
 
   // 最新画像をプリロードするuseEffect
   useEffect(() => {
@@ -317,7 +321,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       console.log("recognizeBorder完了:", points.length, "points");
 
       // 表示倍率（画面でどのサイズで見せるか）
-      const desiredDisplayedWidth = 150; // ←お好みで
+      const desiredDisplayedWidth = blockSize; // 状態から取得
       const desiredDisplayedHeight = (desiredDisplayedWidth * size.h) / size.w; // アスペクト維持
       const sx = desiredDisplayedWidth / size.w; // 画像px → 画面px の倍率
       const sy = desiredDisplayedHeight / size.h;
@@ -393,7 +397,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     } finally {
       setIsSpawning(false); // 処理完了フラグをリセット
     }
-  }, [isSpawning, currentImageUrl, currentImageId]);
+  }, [isSpawning, currentImageUrl, currentImageId, blockSize]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -512,7 +516,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           ctx.closePath();
           ctx.stroke();
         });
-      } // ← for...ofループを閉じる
+      }
 
       // 画面外ブロック削除 & GAME OVER判定（毎フレーム最新の world を参照）
       if (!isGameOverRef.current) {
@@ -602,10 +606,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
     setBlockCount(0);
 
-    // 新規追加: 最新IDをリセット
+    // 最新IDをリセット
     setLastProcessedImageId(null);
 
-    // 新規追加: 自動制御状態をリセット
+    // 自動制御状態をリセット
     setAutoModeState("idle");
     setNextBlockCountdown(0);
     console.log("自動制御状態をリセットしました");
@@ -684,7 +688,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         人数: {blockCount}人
       </div>
 
-      {/* 新規追加: 自動ブロック生成制御UI */}
+      {/* 自動ブロック生成制御UI */}
       <div className={styles.autoBlockGeneration}>
         <button
           onClick={() => setAutoBlockGeneration(!autoBlockGeneration)}
@@ -707,6 +711,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         >
           手動保存
         </button>
+
+        {/* ブロックサイズコントローラー */}
+        <BlockSizeController
+          currentSize={blockSize}
+          onSizeChange={setBlockSize}
+          disabled={autoBlockGeneration}
+        />
 
         <div className={styles.autoBlockInfo}>
           {autoBlockGeneration ? (

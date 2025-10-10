@@ -1,0 +1,66 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.title {
+  font-size: 11px;
+  color: #555;
+  font-weight: bold;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.button {
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.decreaseButton {
+  background-color: #ff6b6b;
+}
+
+.increaseButton {
+  background-color: #4ecdc4;
+}
+
+.sizeDisplay {
+  min-width: 50px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+}
+
+.sizeDisplay.disabled {
+  color: #999;
+}
+
+.description {
+  font-size: 9px;
+  color: #999;
+  text-align: center;
+}
+
+.description.disabled {
+  color: #666;
+}
