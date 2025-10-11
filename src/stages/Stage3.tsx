@@ -7,7 +7,7 @@ export function createStage3(
   // 床の定義
   const groundWidth = 100;
   const groundHeight = 20;
-  const groundX = 225;
+  const groundX = 250;
   const groundY = 740 - groundHeight / 2;
   const ground = Matter.Bodies.rectangle(
     groundX,
