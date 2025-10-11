@@ -11,6 +11,7 @@ import { recognizeBorder } from "./RecognizeBorder.tsx";
 import decomp from "poly-decomp";
 import { createStage3 } from "../stages/Stage3.tsx";
 import BlockSizeController from "./BlockSizeController.tsx";
+import Background from "./background/index.tsx";
 import {
   getLatestImageIdFromIndexedDB,
   getImageFromIndexedDB,
@@ -87,7 +88,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
   // ブロックサイズ制御
   const [blockSize, setBlockSize] = useState<number>(400);
-
 
   // 最新画像をプリロードするuseEffect
   useEffect(() => {
@@ -398,7 +398,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           [shifted],
           {
             label: "TargetImg",
-            isStatic: true, // ← 落ちてくるので動的
+            isStatic: false, // ← 落ちてくるので動的
             friction: 0.6,
             frictionStatic: 0.9,
             restitution: 0.02,
@@ -562,19 +562,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         ctx.restore();
 
         // 当たり判定（子パーツ）はそのまま描画
-        body.parts.forEach((part) => {
-          if (part.id === body.id) return;
+        //body.parts.forEach((part) => {
+//           if (part.id === body.id) return;
 
-          ctx.strokeStyle = "rgba(0,0,255,0.5)";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          part.vertices.forEach((v, i) => {
-            if (i === 0) ctx.moveTo(v.x, v.y);
-            else ctx.lineTo(v.x, v.y);
-          });
-          ctx.closePath();
-          ctx.stroke();
-        });
+//           ctx.strokeStyle = "rgba(0,0,255,0.5)";
+//           ctx.lineWidth = 2;
+//           ctx.beginPath();
+//           part.vertices.forEach((v, i) => {
+//             if (i === 0) ctx.moveTo(v.x, v.y);
+//             else ctx.lineTo(v.x, v.y);
+//           });
+//           ctx.closePath();
+//           ctx.stroke();
+//         });
       }
 
       // 画面外ブロック削除 & GAME OVER判定（毎フレーム最新の world を参照）
@@ -732,35 +732,37 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.canvasWrapper}>
-        <canvas
-          ref={canvasRef}
-          width={500}
-          height={780}
-          className={styles.canvas}
-        />
-        <div className={styles.bodypixWrapper}>
-          <BodyPix ref={bodyPixRef} />
-        </div>
-        <div className={styles.sky}>
-          <div className={`${styles.cloud} ${styles.cloud1}`}></div>
-          <div className={`${styles.cloud} ${styles.cloud2}`}></div>
-          <div className={`${styles.cloud} ${styles.cloud3}`}></div>
+
+      {/* 背景 */}
+      <Background />
+
+      <div className={styles.row}>
+        {/* ブロック人数表示 */}
+        <div className={styles.peopleCount}>人数: {blockCount}人</div>
+
+        {/* キャンバス */}
+        <div className={styles.canvasWrapper}>
+          <canvas
+            ref={canvasRef}
+            width={500}
+            height={780}
+            className={styles.canvas}
+          />
+          <div className={styles.bodypixWrapper}>
+            <BodyPix ref={bodyPixRef} />
+          </div>
         </div>
 
-        <div className={styles.sun}>
-          <div className={styles.sunCore}></div>
-        </div>
-
+        {/* カウントダウン */}
+        <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
       </div>
 
-      {isCleared && (
+        {isCleared && (
         <div className={styles.clearOverlay}>
           <p className={styles.clearText}>🎉 CLEAR!! 🎉</p>
           <p className={styles.clearScore}>あなたのスコア：{blockCount}人</p>
         </div>
       )}
-
       {isGameOver && (
         <div className={styles.gameOverOverlay}>
           <p className={styles.gameOverText}>GAME OVER</p>
@@ -770,12 +772,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           )}
         </div>
       )}
-
-      {/* ブロック人数表示 */}
-      <>
-        <div className={styles.peopleCount}>人数: {blockCount}人</div>
-        <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
-      </>
 
       {/* 自動ブロック生成制御UI */}
       <div className={styles.autoBlockGeneration}>
@@ -789,7 +785,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         >
           自動ブロック生成: {autoBlockGeneration ? "ON" : "OFF"}
         </button>
-
         <button
           onClick={() => bodyPixRef.current?.saveToIndexedDB()}
           disabled={!bodyPixRef.current?.isReady()}
@@ -800,14 +795,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         >
           手動保存
         </button>
-
-        {/* ブロックサイズコントローラー */}
+        ブロックサイズコントローラー
         <BlockSizeController
           currentSize={blockSize}
           onSizeChange={setBlockSize}
           disabled={autoBlockGeneration}
         />
-
         <div className={styles.autoBlockInfo}>
           {autoBlockGeneration ? (
             <>
@@ -824,11 +817,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       </div>
 
       {/* ホーム画面に戻るボタン */}
-      <div>
-        <button onClick={() => navigate("/")} className={styles.homeButton}>
-          ホームに戻る
-        </button>
-      </div>
+      <button onClick={() => navigate("/")} className={styles.homeButton}>
+        ホームに戻る
+      </button>
     </div>
   );
 };
