@@ -398,8 +398,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           [shifted],
           {
             label: "TargetImg",
-            isStatic: false, // ← 落ちてくるので動的
-            friction: 0.6,
+            isStatic: true, // ← 落ちてくるので動的
+            friction: 0.9,
             frictionStatic: 0.9,
             restitution: 0.02,
             density: 0.02,
@@ -745,7 +745,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           <canvas
             ref={canvasRef}
             width={500}
-            height={780}
+            height={1100}
             className={styles.canvas}
           />
           <div className={styles.bodypixWrapper}>
