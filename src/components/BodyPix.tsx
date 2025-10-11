@@ -16,12 +16,12 @@ import { saveCanvasToIndexedDB } from "../utils/db";
 const SEGMENTATION_CONFIG = {
   OPACITY: 1.0,
   BLUR_AMOUNT: 2.0,
-  FLIP_HORIZONTAL: false,
+  FLIP_HORIZONTAL: true,
 } as const;
 
 const CANVAS_STYLE = {
-  width: 450,
-  height: 300,
+  width: 500,
+  height: 333,
 } as const;
 
 // =======================================
@@ -136,6 +136,22 @@ const segmentDrawAndApplyAlpha = async (params: {
 
   // 1) セグメンテーション
   const segmentation = await model.segmentPerson(video, opts);
+  const segW = segmentation.width;
+  const segH = segmentation.height;
+  // マスク（0/1）を取得
+  let personMask: Uint8Array | Int32Array | number[] = segmentation.data;
+  // キャンバス描画を左右反転しているため、マスクも左右反転して揃える
+  if (opts.flipHorizontal) {
+    const flipped = new Uint8Array(segW * segH);
+    for (let y = 0; y < segH; y++) {
+      const row = y * segW;
+      for (let x = 0; x < segW; x++) {
+        // 左右入れ替え
+        flipped[row + x] = (personMask as any)[row + (segW - 1 - x)];
+      }
+    }
+    personMask = flipped;
+  }
 
   // 2) フレーム描画（必要なら左右反転）
   ctx.save();
@@ -143,14 +159,15 @@ const segmentDrawAndApplyAlpha = async (params: {
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
   }
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(video, 0, 0, canvas.width, 
+    canvas.height);
   ctx.restore();
 
   // 3) ピクセル取得
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
   // 4) 緑除去補正マスク
-  const refinedMask = refineMaskWithGreen(segmentation.data, imageData);
+  const refinedMask = refineMaskWithGreen(personMask as Uint8Array, imageData);
 
   // 5) αを書き換え（人物=255 / 背景=0）
   const data = imageData.data;
@@ -309,6 +326,7 @@ const BodyPix = forwardRef<BodyPixRef, BodyPixProps>(
           canvas: canvasRef.current,
           model,
           // segmentOpts: { segmentationThreshold: 0.75 }, // 必要なら上書き
+          segmentOpts: { flipHorizontal: true }
         });
       } catch (error) {
         console.error("セグメンテーション実行エラー:", error);
@@ -350,6 +368,7 @@ const BodyPix = forwardRef<BodyPixRef, BodyPixProps>(
           video,
           canvas: tempCanvas,
           model,
+          segmentOpts: { flipHorizontal: true }
         });
 
         const id = await saveCanvasToIndexedDB(tempCanvas);
@@ -396,7 +415,7 @@ const BodyPix = forwardRef<BodyPixRef, BodyPixProps>(
         {/* 非表示のビデオ要素（データソース） */}
         <video
           ref={videoRef}
-          style={{ position: "absolute", left: "-9999px" }}
+          style={{ position: "absolute", left: "-9999px"}}
           muted
           playsInline
         />

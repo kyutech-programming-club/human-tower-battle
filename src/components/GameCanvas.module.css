@@ -23,7 +23,7 @@
 .bodypixWrapper {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 51.5%;
   transform: translateX(-50%);
   z-index: 2; /* canvasより上 */
 }
