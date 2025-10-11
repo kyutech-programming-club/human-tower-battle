@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { BlockManager } from "./BlockManager.tsx";
 import { createStage1 } from "../stages/Stage1.tsx";
 import { createStage2 } from "../stages/Stage2.tsx";
+import { checkClearCondition } from "./../type/checkClearCondition.ts";
 import { recognizeBorder } from "./RecognizeBorder.tsx";
 import decomp from "poly-decomp";
 import { createStage3 } from "../stages/Stage3.tsx";
@@ -39,10 +40,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
   const isGameOverRef = useRef<boolean>(false);
   const countdownRef = useRef<number | null>(null);
 
+  const [isCleared, setIsCleared] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
   const [blockCount, setBlockCount] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [position, setPosition] = useState(400);
+  const clearStartRef = useRef<number | null>(null);
+  const CLEAR_HOLD_MS = 3000; // 3秒（ミリ秒）
 
   const [isSpawning, setIsSpawning] = useState(false); // スペースキー処理中フラグ
 
@@ -152,14 +156,39 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
   // 統一自動制御機能
   useEffect(() => {
-    if (!autoBlockGeneration || isGameOver) return;
+    // --- 停止条件 ---
+    if (!autoBlockGeneration || isGameOver || isCleared) {
+      // 👇 終了時にカウントダウン開始
+      if (isGameOver || isCleared) {
+        console.log("ゲーム終了またはクリア - 自動リスタート準備");
+        setCountdown(3);
+
+        const restartInterval = setInterval(() => {
+          setCountdown((prev) => {
+            if (prev === null) return null;
+            if (prev <= 1) {
+              clearInterval(restartInterval);
+              restartGame();
+              setIsCleared(false);
+              clearStartRef.current = null;
+              setCountdown(null);
+              console.log("ゲーム自動リスタート完了");
+              return null;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        return () => clearInterval(restartInterval);
+      }
+      return; // 通常停止
+    }
 
     console.log("統一自動制御モード開始");
 
     const executeAutoSequence = async () => {
-      // ゲームオーバーチェック（実行前）
-      if (isGameOver) {
-        console.log("ゲームオーバーのため自動制御を停止");
+      if (isGameOver || isCleared) {
+        console.log("ゲームオーバーまたはクリアのため自動制御を停止");
         return;
       }
 
@@ -168,28 +197,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         setAutoModeState("capturing");
         console.log("1. 撮影開始");
 
-        // 2. BodyPixで保存実行
+        // 2. 保存
         setAutoModeState("saving");
         console.log("2. 保存開始");
         const imageId = await bodyPixRef.current?.saveToIndexedDB();
 
-        if (!imageId) {
-          throw new Error("画像保存に失敗しました");
-        }
+        if (!imageId) throw new Error("画像保存に失敗しました");
 
         console.log("3. 保存完了", imageId);
-
         // 少し待機（IndexedDB書き込み完了を確実にする）
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        // ゲームオーバーチェック（ブロック生成前）
-        if (isGameOver) {
-          console.log("ゲームオーバーのためブロック生成をスキップ");
+        // await new Promise((resolve) => setTimeout(resolve, 200));
+        if (isGameOver || isCleared) {
+          console.log("ゲームオーバーまたはクリアのためブロック生成をスキップ");
           setAutoModeState("idle");
           return;
         }
 
-        // 4. ブロック生成開始
+        // 4. ブロック生成
         setAutoModeState("generating");
         console.log("4. ブロック生成開始");
         await spawnTargetImg();
@@ -262,7 +286,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       setAutoModeState("idle");
       setNextBlockCountdown(0);
     };
-  }, [autoBlockGeneration, isGameOver]); // isGameOverを依存配列に追加
+  }, [autoBlockGeneration, isGameOver, isCleared]);
 
   // 初期化時に現在の最新IDを設定
   useEffect(() => {
@@ -464,6 +488,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       // ステージ描画
       stageObjRef.current?.draw();
 
+      // === クリアライン描画 ===
+      const CLEAR_LINE_Y = 150; // ← checkClearCondition の値と揃える
+      ctx.beginPath();
+      ctx.moveTo(0, CLEAR_LINE_Y);
+      ctx.lineTo(canvas.width, CLEAR_LINE_Y);
+      ctx.strokeStyle = "rgba(255, 215, 0, 0.8)"; // 金色
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 6]); // 点線にする
+      ctx.stroke();
+      ctx.setLineDash([]); // リセット
+
+      ctx.font = "20px 'Arial'";
+      ctx.fillStyle = "rgba(255, 215, 0, 0.9)";
+      ctx.fillText("CLEAR LINE", 10, CLEAR_LINE_Y - 10);
+
       // ブロック描画
       ctx.fillStyle = "blue";
       blockManagerRef.current.blocks.forEach((b) => {
@@ -523,19 +562,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         ctx.restore();
 
         // 当たり判定（子パーツ）はそのまま描画
-        body.parts.forEach((part) => {
-          if (part.id === body.id) return;
+        //body.parts.forEach((part) => {
+//           if (part.id === body.id) return;
 
-          ctx.strokeStyle = "rgba(0,0,255,0.5)";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          part.vertices.forEach((v, i) => {
-            if (i === 0) ctx.moveTo(v.x, v.y);
-            else ctx.lineTo(v.x, v.y);
-          });
-          ctx.closePath();
-          ctx.stroke();
-        });
+//           ctx.strokeStyle = "rgba(0,0,255,0.5)";
+//           ctx.lineWidth = 2;
+//           ctx.beginPath();
+//           part.vertices.forEach((v, i) => {
+//             if (i === 0) ctx.moveTo(v.x, v.y);
+//             else ctx.lineTo(v.x, v.y);
+//           });
+//           ctx.closePath();
+//           ctx.stroke();
+//         });
       }
 
       // 画面外ブロック削除 & GAME OVER判定（毎フレーム最新の world を参照）
@@ -569,6 +608,31 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
             setIsGameOver(true);
           }
         });
+      }
+
+      if (!isGameOverRef.current && !isCleared) {
+        const now = performance.now();
+        const isClearNow = checkClearCondition(engine.world, CLEAR_LINE_Y);
+
+        if (isClearNow) {
+          if (clearStartRef.current === null) {
+            // クリア条件が初めて成立した時刻を保存
+            clearStartRef.current = now;
+          } else {
+            // 既に成立していた → 経過時間をチェック
+            const elapsed = now - clearStartRef.current;
+            if (elapsed >= CLEAR_HOLD_MS) {
+              console.log("🎉 CLEAR! 持続判定クリア");
+              setIsCleared(true);
+              clearStartRef.current = null;
+            } else {
+              // まだ継続時間不足（必要なら進捗表示をここで更新）
+            }
+          }
+        } else {
+          // 条件が途切れたらリセット
+          clearStartRef.current = null;
+        }
       }
 
       animationFrameId = requestAnimationFrame(update);
@@ -659,6 +723,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     }
   }, [isGameOver]);
 
+
   useEffect(() => {
     if (isGameOver) {
       saveScore(blockCount);
@@ -667,6 +732,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
   return (
     <div className={styles.container}>
+
       {/* 背景 */}
       <Background />
 
@@ -691,6 +757,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
       </div>
 
+        {isCleared && (
+        <div className={styles.clearOverlay}>
+          <p className={styles.clearText}>🎉 CLEAR!! 🎉</p>
+          <p className={styles.clearScore}>あなたのスコア：{blockCount}人</p>
+        </div>
+      )}
       {isGameOver && (
         <div className={styles.gameOverOverlay}>
           <p className={styles.gameOverText}>GAME OVER</p>
