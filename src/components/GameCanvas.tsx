@@ -730,6 +730,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     }
   }, [isGameOver]);
 
+  useEffect(() => {
+    if (isCleared) {
+      saveScore(blockCount);
+    }
+  }, [isCleared]);
+
   return (
     <div className={styles.container}>
 
