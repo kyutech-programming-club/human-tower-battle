@@ -231,7 +231,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     };
 
     // 改良版: 処理完了を待ってから次のカウントダウンを開始
-    let countdownValue = 5;
+    let countdownValue = 8;
     let isExecuting = false; // 処理中フラグ
     setNextBlockCountdown(countdownValue);
 
@@ -255,6 +255,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       setNextBlockCountdown(countdownValue);
 
       if (countdownValue === 0) {
+        const engine = engineRef.current;
+        const world = engine.world;
+        for (const body of world.bodies) {
+          if (body.label !== "TargetImg") continue;
+          const pos = { ...body.position };
+          const angle = body.angle;
+
+          // 複合ボディ全体を静的化
+          Matter.Body.setStatic(body, true);
+
+          // ズレ補正
+          Matter.Body.setPosition(body, pos);
+          Matter.Body.setAngle(body, angle);
+        }
         // BodyPixが準備できているかチェック
         if (bodyPixRef.current?.isReady()) {
           isExecuting = true; // 処理開始フラグ
@@ -266,7 +280,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
             console.error("自動制御実行エラー:", error);
           } finally {
             isExecuting = false; // 処理完了フラグ
-            countdownValue = 5; // 処理完了後にリセット
+            countdownValue = 8; // 処理完了後にリセット
             setNextBlockCountdown(countdownValue);
             console.log("処理完了 - 次のカウントダウン開始");
           }
@@ -398,7 +412,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
           [shifted],
           {
             label: "TargetImg",
-            isStatic: true, // ← 落ちてくるので動的
+            isStatic: false, // ← 落ちてくるので動的
             friction: 0.9,
             frictionStatic: 0.9,
             restitution: 0.02,
@@ -442,7 +456,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
       setIsSpawning(false); // 処理完了フラグをリセット
     }
   }, [isSpawning, currentImageUrl, currentImageId, blockSize]);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -477,7 +490,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     const update = () => {
       const engine = engineRef.current;
       const world = engine.world;
-
       // 物理を進めるかどうか
       if (!isGameOverRef.current) {
         Matter.Engine.update(engine, 1000 / 60);
@@ -563,18 +575,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
         // 当たり判定（子パーツ）はそのまま描画
         //body.parts.forEach((part) => {
-//           if (part.id === body.id) return;
+        //           if (part.id === body.id) return;
 
-//           ctx.strokeStyle = "rgba(0,0,255,0.5)";
-//           ctx.lineWidth = 2;
-//           ctx.beginPath();
-//           part.vertices.forEach((v, i) => {
-//             if (i === 0) ctx.moveTo(v.x, v.y);
-//             else ctx.lineTo(v.x, v.y);
-//           });
-//           ctx.closePath();
-//           ctx.stroke();
-//         });
+        //           ctx.strokeStyle = "rgba(0,0,255,0.5)";
+        //           ctx.lineWidth = 2;
+        //           ctx.beginPath();
+        //           part.vertices.forEach((v, i) => {
+        //             if (i === 0) ctx.moveTo(v.x, v.y);
+        //             else ctx.lineTo(v.x, v.y);
+        //           });
+        //           ctx.closePath();
+        //           ctx.stroke();
+        //         });
       }
 
       // 画面外ブロック削除 & GAME OVER判定（毎フレーム最新の world を参照）
@@ -723,7 +735,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
     }
   }, [isGameOver]);
 
-
   useEffect(() => {
     if (isGameOver) {
       saveScore(blockCount);
@@ -738,7 +749,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
 
   return (
     <div className={styles.container}>
-
       {/* 背景 */}
       <Background />
 
@@ -763,7 +773,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ stage }) => {
         <div className={styles.countdownCircle}>{nextBlockCountdown}秒</div>
       </div>
 
-        {isCleared && (
+      {isCleared && (
         <div className={styles.clearOverlay}>
           <p className={styles.clearText}>🎉 CLEAR!! 🎉</p>
           <p className={styles.clearScore}>あなたのスコア：{blockCount}人</p>
